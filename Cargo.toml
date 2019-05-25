@@ -1,0 +1,20 @@
+[package]
+name = "overlay"
+version = "0.1.0"
+authors = ["KedamaOvO <moe@mao-yu.net>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "overlay"
+crate-type = ["dylib"]
+
+[dependencies]
+winapi = {version = "0.3.7",features = ["wingdi","libloaderapi","consoleapi"]}
+detour = "0.6.0"
+glad-gl2 = {path = "./glad-gl2"}
+glad-gles2 = {path = "./glad-gles2"}
+imgui = "0.0.23"
+lazy_static = "1.3.0"
+libc = "*"
