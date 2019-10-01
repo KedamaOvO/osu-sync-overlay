@@ -1,49 +1,54 @@
-mod egl_def;
-use egl_def::*;
+mod gl;
+mod gles;
+mod sync;
+mod gui;
+mod utils;
+
+use gles::egldef::*;
+use utils::*;
 
 #[macro_use] extern crate lazy_static;
-use winapi::shared::ntdef::{HANDLE, LPCWSTR,LPCSTR};
+#[macro_use] extern crate log;
+use winapi::shared::ntdef::{HANDLE, LPCWSTR};
 use winapi::shared::minwindef::{BOOL, DWORD, LPVOID, HINSTANCE, TRUE, HMODULE};
 use winapi::shared::windef::{HDC};
-use winapi::um::libloaderapi;
-use winapi::um::consoleapi;
 use detour::GenericDetour;
 
 use std::sync::Mutex;
-use std::mem;
+use std::mem::transmute;
+use simplelog::{CombinedLogger, WriteLogger, Config, LevelFilter};
+use std::fs::File;
+use crate::gl::OpenGLRenderer;
+use crate::gles::GLESRenderer;
+use crate::gui::{UI, UIRenderer};
+use crate::sync::*;
+use std::{mem, thread};
+use std::collections::HashMap;
+use std::ffi::{OsString, OsStr};
+use widestring::U16CString;
 
 type FnLoadLibraryExW = extern "stdcall" fn(LPCWSTR, HANDLE, DWORD) -> HMODULE;
 type FnGLSwapBuffers = extern "stdcall" fn (HDC) -> BOOL;
 type FnEGLSwapBuffers = extern "stdcall" fn(EGLDisplay,EGLSurface)->EGLBoolean;
 
-lazy_static!{
-    static ref LOAD_LIBRARY_EX_HOOKER: Mutex<GenericDetour<FnLoadLibraryExW>> = {
+lazy_static! {
+    static ref LOAD_LIBRARY_EX_HOOKER: GenericDetour<FnLoadLibraryExW> = {
         unsafe{
-            let module = libloaderapi::GetModuleHandleA(b"kernel32.dll\0".as_ptr() as *const i8);
-            eprintln!("Kernel32 Module: 0x{:X?}",module as i32);
+            let load_library_exw_addr:FnLoadLibraryExW = transmute(get_proc_address("kernel32.dll","LoadLibraryExW"));
+            debug!("LoadLibraryExW Address: 0x{:X?}",load_library_exw_addr as i32);
 
-            let load_library_exw_addr:FnLoadLibraryExW = mem::transmute(
-                libloaderapi::GetProcAddress(module,b"LoadLibraryExW\0".as_ptr() as *const i8),
-            );
-            eprintln!("LoadLibraryExW Address: 0x{:X?}",load_library_exw_addr as i32);
-
-            let mut hook = GenericDetour::<FnLoadLibraryExW>::new(load_library_exw_addr,hook_load_library_ex).unwrap();
+            let hook = GenericDetour::<FnLoadLibraryExW>::new(load_library_exw_addr,hook_load_library_ex).unwrap();
             hook.enable().unwrap();
-            return Mutex::new(hook);
+            return hook;
         }
     };
 
     static ref GL_HOOKER: GenericDetour<FnGLSwapBuffers> = {
         unsafe{
-            let module = libloaderapi::GetModuleHandleA(b"gdi32.dll\0".as_ptr() as *const i8);
-            eprintln!("GDI Module: 0x{:X?}",module as i32);
+            let swap_buffers_addr:FnGLSwapBuffers = transmute(get_proc_address("gdi32.dll","SwapBuffers"));
+            debug!("SwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
 
-            let swap_buffers_addr:FnGLSwapBuffers = mem::transmute(
-                libloaderapi::GetProcAddress(module,b"SwapBuffers\0".as_ptr() as *const i8),
-            );
-            eprintln!("SwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
-
-            let mut hook = GenericDetour::<FnGLSwapBuffers>::new(swap_buffers_addr,gl_swap_buffers).unwrap();
+            let hook = GenericDetour::<FnGLSwapBuffers>::new(swap_buffers_addr,wgl_swap_buffers).unwrap();
             hook.enable().unwrap();
             return hook;
         }
@@ -51,21 +56,15 @@ lazy_static!{
 
     static ref GLES_HOOKER: GenericDetour<FnEGLSwapBuffers> = {
         unsafe{
-            let module = libloaderapi::GetModuleHandleA(b"libegl.dll\0".as_ptr() as *const i8);
-            eprintln!("EGL Module: 0x{:X?}",module as i32);
+            let swap_buffers_addr:FnEGLSwapBuffers = transmute(get_proc_address("libegl.dll","eglSwapBuffers"));
+            debug!("eglSwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
 
-            let swap_buffers_addr:FnEGLSwapBuffers = mem::transmute(
-                libloaderapi::GetProcAddress(module,b"eglSwapBuffers\0".as_ptr() as *const i8),
-            );
-
-            eprintln!("eglSwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
-            let mut hook = GenericDetour::<FnEGLSwapBuffers>::new(swap_buffers_addr,egl_swap_buffers).unwrap();
+            let hook = GenericDetour::<FnEGLSwapBuffers>::new(swap_buffers_addr,egl_swap_buffers).unwrap();
             hook.enable().unwrap();
             return hook;
         }
     };
 }
-
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -75,7 +74,6 @@ pub extern "stdcall" fn DllMain(
     reserved: LPVOID)
     -> BOOL
 {
-
     const DLL_PROCESS_ATTACH: DWORD = 1;
     const DLL_PROCESS_DETACH: DWORD = 0;
 
@@ -88,64 +86,147 @@ pub extern "stdcall" fn DllMain(
     return TRUE;
 }
 
-#[cfg(debug_assertions)]
-fn enable_debug_console(){
-    unsafe{
-        consoleapi::AllocConsole();
+static mut GLOBAL_CONFIG : Option<GlobalConfig> = None;
+static mut OVERLAY_CONFIG : Option<OverlayConfig> = None;
+static mut OVERLAY_MMFS : Option<HashMap<String,MemoryMappingFile>> = None;
+const MMF_OVERLAY_CONFIG_LENGTH:usize = 65535;
+const MMF_LENGTH:usize = 4096;
 
-        libc::freopen(b"conout$\0".as_ptr() as *const i8,
-                      b"w\0".as_ptr() as *const i8,
-                      libc::fdopen(2, b"w\0".as_ptr() as *const i8));
+fn load_overlay_mmfs(configs:&[OverlayConfigItem])->HashMap<String,MemoryMappingFile>{
+    let mut map = HashMap::new();
+    for config in configs.iter(){
+        let mut mmf = MemoryMappingFile::new(config.mmf.as_str(),MMF_LENGTH);
+        unsafe{mmf.map()};
+        map.insert(config.mmf.clone(),mmf);
     }
+    map
+}
 
+fn init_logger(){
+    CombinedLogger::init(
+        vec![
+            WriteLogger::new(LevelFilter::Info, Config::default(), File::create("overlay-log.log").unwrap()),
+            #[cfg(debug_assertions)]
+            WriteLogger::new(LevelFilter::Trace, Config::default(), File::create("overlay-debug.log").unwrap()),
+        ]
+    ).unwrap();
+}
+
+fn init_config(){
+    unsafe{
+        GLOBAL_CONFIG = Some(GlobalConfig::new(MemoryMappingFile::new("Local\\rtpp-overlay-global-config",mem::size_of::<GlobalConfig>())));
+        OVERLAY_CONFIG = Some(OverlayConfig::new(MemoryMappingFile::new("Local\\rtpp-overlay-configs",MMF_OVERLAY_CONFIG_LENGTH)));
+        OVERLAY_MMFS = Some(load_overlay_mmfs(OVERLAY_CONFIG.as_ref().unwrap().config_items.as_slice()));
+    }
 }
 
 fn init() {
-    enable_debug_console();
+    init_logger();
+    init_config();
 
-    lazy_static::initialize(&LOAD_LIBRARY_EX_HOOKER);
+    if !module_is_loaded("libegl.dll") &&
+        !module_is_loaded("opengl32.dll")
+    {
+        lazy_static::initialize(&LOAD_LIBRARY_EX_HOOKER);
+    }else{
+        lazy_static::initialize(&GL_HOOKER);
+        lazy_static::initialize(&GLES_HOOKER);
+        unsafe{GL_HOOKER_OK = true;}
+    }
 }
+
+static mut GL_HOOKER_OK:bool = false;
 
 #[allow(non_snake_case)]
 extern "stdcall" fn hook_load_library_ex(lpLibFileName:LPCWSTR,hFile:HANDLE,dwFlags:DWORD) -> HMODULE{
-    let module = (*LOAD_LIBRARY_EX_HOOKER).lock().unwrap().call(lpLibFileName,hFile,dwFlags);
+    let module = (*LOAD_LIBRARY_EX_HOOKER).call(lpLibFileName,hFile,dwFlags);
+    let lib_name = unsafe{U16CString::from_ptr_str(lpLibFileName)}.to_string_lossy();
 
-    if strcmp(lpLibFileName,b"gdi32.dll\0".as_ptr()){
+    if lib_name.as_str() == "gdi32.dll"{
+        info!("OpenGL ready");
         lazy_static::initialize(&GL_HOOKER);
-    } else if strcmp(lpLibFileName,b"libegl.dll\0".as_ptr()){
+        unsafe{GL_HOOKER_OK = true;}
+    } else if lib_name.as_str() == "libegl.dll"{
+        info!("OpenGL ES ready");
         lazy_static::initialize(&GLES_HOOKER);
+        unsafe{GL_HOOKER_OK = true;}
     }
 
     //remove hooker(LoadLibraryExW)
     unsafe {
-        if (*GL_HOOKER).is_enabled() && (*GLES_HOOKER).is_enabled() {
-            (*LOAD_LIBRARY_EX_HOOKER).lock().unwrap().disable().unwrap();
-            eprintln!("Removed LoadLibraryExW Hook");
+        if GL_HOOKER_OK {
+            (*LOAD_LIBRARY_EX_HOOKER).disable().unwrap();
+            info!("Removed LoadLibraryExW hook");
         }
     }
 
     return module;
+}
 
-    fn strcmp(a:*const u16,b:*const u8)->bool{
-        unsafe{
-            while *a != 0 && *b !=0{
-                if (*a) as u16 != *b as u16{
-                    return false;
-                }
-                b.add(1);
-                a.add(1);
-            }
+static mut GL_UI:Option<UI<OpenGLRenderer>> = None;
+static mut GLES_UI:Option<UI<GLESRenderer>> = None;
+
+fn check_config_changed<R:UIRenderer>(ui:&mut UI<R>,force:bool){
+    unsafe{
+        if GLOBAL_CONFIG.as_ref().unwrap().check_changed() || force{
+            GLOBAL_CONFIG = Some(GLOBAL_CONFIG.take().unwrap().reload());
         }
-        true
+
+        if OVERLAY_CONFIG.as_ref().unwrap().check_changed() || force{
+            info!("Reload overlay config");
+            OVERLAY_CONFIG = Some(OVERLAY_CONFIG.take().unwrap().reload());
+            info!("Reload fonts");
+            ui.reload_fonts(OVERLAY_CONFIG.as_ref().unwrap(),GLOBAL_CONFIG.as_ref().unwrap().glyph_ranges.as_str());
+            info!("Fonts Reloaded");
+        }
     }
 }
 
-extern "stdcall" fn gl_swap_buffers(hdc:HDC) -> BOOL{
-    eprintln!("GL");
+extern "stdcall" fn wgl_swap_buffers(hdc:HDC) -> BOOL{
+    //debug!("{:?}",Backtrace::new());
+    unsafe {
+        match &mut GL_UI{
+            None=>{
+                OpenGLRenderer::load_func();
+                GL_UI = Some(UI::init(OpenGLRenderer::init(hdc)));
+                GL_UI.as_mut().map(|ui|{
+                    check_config_changed(ui,true);
+                });
+                info!("GL Initialized");
+            }
+            Some(ui)=>{
+                ui.render(OVERLAY_CONFIG.as_ref().unwrap(),OVERLAY_MMFS.as_ref().unwrap());
+            }
+        }
+
+        GL_UI.as_mut().map(|ui|{
+            check_config_changed(ui,false);
+        });
+    }
     return (*GL_HOOKER).call(hdc);
 }
 
 extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGLBoolean{
-    eprintln!("EGL");
+    info!("GLES");
+    unsafe {
+        match &mut GLES_UI{
+            None=>{
+                GLESRenderer::load_func();
+                GLES_UI = Some(UI::init(GLESRenderer::init(display,surface)));
+                GLES_UI.as_mut().map(|ui|{
+                    check_config_changed(ui,true);
+                });
+                info!("GLES Initialized");
+            }
+            Some(ui)=>{
+                ui.render(OVERLAY_CONFIG.as_ref().unwrap(),OVERLAY_MMFS.as_ref().unwrap());
+            }
+        }
+
+        GLES_UI.as_mut().map(|ui|{
+            check_config_changed(ui,false);
+        });
+    }
+
     return (*GLES_HOOKER).call(display,surface);
 }
