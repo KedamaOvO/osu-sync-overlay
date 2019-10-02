@@ -191,29 +191,28 @@ impl UIRenderer for OpenGLRenderer {
 
             let (w,h) = self.frame_size;
             gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
+            let L = draw_data.display_pos[0];
+            let R = draw_data.display_pos[0] + draw_data.display_size[0];
+            let T = draw_data.display_pos[1];
+            let B = draw_data.display_pos[1] + draw_data.display_size[1];
 
             let ortho_projection:[[f32;4];4] =
                 [
-                    [  2.0 / w as f32, 0.0,                          0.0, 0.0 ],
-                    [  0.0,                       2.0 / h as f32,    0.0, 0.0 ],
-                    [  0.0,                       0.0,              -1.0, 0.0 ],
-                    [ -1.0,                       1.0,               0.0, 1.0 ],
+                    [  2.0/(R-L),        0.0,                 0.0, 0.0 ],
+                    [  0.0,              2.0/(T-B),           0.0, 0.0 ],
+                    [  0.0,              0.0,                -1.0, 0.0 ],
+                    [ (R+L)/(L-R),       (T+B)/(B-T),         0.0, 1.0 ],
                 ];
 
             gl::UseProgram(self.shader);
             gl::Uniform1i(self.texture_location, 0);
             gl::UniformMatrix4fv(self.proj_matrix_location, 1, gl::FALSE, &ortho_projection[0][0]);
-            gl::EnableVertexAttribArray(self.position_location as u32);
-            gl::EnableVertexAttribArray(self.uv_location as u32);
-            gl::EnableVertexAttribArray(self.color_location as u32);
-            gl::VertexAttribPointer(self.position_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 0 as *const GLvoid);
-            gl::VertexAttribPointer(self.uv_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 8 as *const GLvoid);
-            gl::VertexAttribPointer(self.color_location as u32, 4, gl::UNSIGNED_BYTE, gl::TRUE, mem::size_of::<DrawVert>() as i32, 16 as *const GLvoid);
 
             for cmd_list in draw_data.draw_lists(){
                 let mut idx_buffer_offset = 0;
                 let vbo = self.vbos[self.index];
                 let ibo = self.ibos[self.index];
+                debug!("Select vbo:{} ibo:{}",vbo,ibo);
                 self.index = (self.index + 1) % self.vbos.len();
 
                 gl::BindBuffer(gl::ARRAY_BUFFER,vbo);
@@ -223,12 +222,22 @@ impl UIRenderer for OpenGLRenderer {
                                mem::transmute(vtx_buffer.as_ptr()),
                                 gl::STREAM_DRAW);
 
+                debug!("uvs: {:?}",vtx_buffer.iter().map(|v|v.uv));
+
                 let idx_buffer = cmd_list.idx_buffer();
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER,ibo);
                 gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
                                mem::transmute(idx_buffer.len() * mem::size_of::<u16>()),
                                mem::transmute(idx_buffer.as_ptr()),
                                gl::STREAM_DRAW);
+
+                gl::EnableVertexAttribArray(self.position_location as u32);
+                gl::EnableVertexAttribArray(self.uv_location as u32);
+                gl::EnableVertexAttribArray(self.color_location as u32);
+                gl::VertexAttribPointer(self.position_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 0 as *const GLvoid);
+                gl::VertexAttribPointer(self.uv_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 8 as *const GLvoid);
+                gl::VertexAttribPointer(self.color_location as u32, 4, gl::UNSIGNED_BYTE, gl::TRUE, mem::size_of::<DrawVert>() as i32, 16 as *const GLvoid);
+
 
                 for cmd in cmd_list.commands(){
                     match cmd{

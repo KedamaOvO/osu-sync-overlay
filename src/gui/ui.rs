@@ -147,6 +147,7 @@ impl<R> UI<R>
 
         Window::new(im_str!("123"))
             .title_bar(true)
+            .always_auto_resize(true)
             .build(&ui,||{
                 ui.text("ASD");
             });
