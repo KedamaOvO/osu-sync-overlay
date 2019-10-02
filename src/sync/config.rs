@@ -102,58 +102,6 @@ impl<'a> OverlayConfig<'a>{
 }
 
 impl OverlayConfigItem{
-//    pub fn new(ptr:*const u8)->Self{
-//        unsafe {
-//            let mut ptr = ptr as *const c_char;
-//            let mmf = CStr::from_ptr(ptr);
-//            ptr = ptr.add(128);
-//            let font_path = CStr::from_ptr(ptr);
-//            ptr = ptr.add(512);
-//
-//            let mut ptr = ptr as *const i32;
-//            let x= *ptr;
-//            ptr = ptr.add(1);
-//            let y=*ptr;
-//            ptr = ptr.add(1);
-//
-//            let mut ptr = ptr as *const [f32;4];
-//            let text_color = *ptr;
-//            ptr = ptr.add(1);
-//            let background_color = *ptr;
-//            ptr = ptr.add(1);
-//            let border_color = *ptr;
-//            ptr = ptr.add(1);
-//
-//            let mut ptr = ptr as *const [f32;2];
-//            let pivot = *ptr;
-//            ptr = ptr.add(1);
-//
-//            let mut ptr = ptr as *const i32;
-//            let font_size = *ptr;
-//            ptr = ptr.add(1);
-//
-//            let ptr = ptr as *const f32;
-//            let font_scale = *ptr;
-//            ptr.add(1);
-//
-//            let ptr = ptr as *const bool;
-//            let visibility = *ptr;
-//
-//            OverlayConfigItem{
-//                mmf:mmf.to_str().unwrap().to_string(),
-//                font_path:font_path.to_str().unwrap().to_string(),
-//                x,y,
-//                text_color,
-//                background_color,
-//                border_color,
-//                pivot,
-//                font_size,
-//                font_scale,
-//                visibility
-//            }
-//        }
-//    }
-
     pub fn mmf(&self)->&str{
         let str = unsafe{CStr::from_ptr(self.mmf.as_ptr())};
         str.to_str().unwrap()
