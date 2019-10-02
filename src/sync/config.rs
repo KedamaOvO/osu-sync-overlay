@@ -66,8 +66,6 @@ impl GlobalConfig {
     }
 }
 
-const OVERLAY_CONFIG_OFFSET:usize = 713;
-
 impl<'a> OverlayConfig<'a>{
     pub fn new(mut mmf:MemoryMappingFile)->Self{
         unsafe{

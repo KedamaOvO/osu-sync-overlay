@@ -14,17 +14,14 @@ use winapi::shared::minwindef::{BOOL, DWORD, LPVOID, HINSTANCE, TRUE, HMODULE};
 use winapi::shared::windef::{HDC};
 use detour::GenericDetour;
 
-use std::sync::Mutex;
-use std::mem::transmute;
 use simplelog::{CombinedLogger, WriteLogger, Config, LevelFilter};
 use std::fs::File;
 use crate::gl::OpenGLRenderer;
 use crate::gles::GLESRenderer;
 use crate::gui::{UI, UIRenderer};
 use crate::sync::*;
-use std::{mem, thread};
+use std::mem;
 use std::collections::HashMap;
-use std::ffi::{OsString, OsStr};
 use widestring::U16CString;
 
 type FnLoadLibraryExW = extern "stdcall" fn(LPCWSTR, HANDLE, DWORD) -> HMODULE;
@@ -34,7 +31,7 @@ type FnEGLSwapBuffers = extern "stdcall" fn(EGLDisplay,EGLSurface)->EGLBoolean;
 lazy_static! {
     static ref LOAD_LIBRARY_EX_HOOKER: GenericDetour<FnLoadLibraryExW> = {
         unsafe{
-            let load_library_exw_addr:FnLoadLibraryExW = transmute(get_proc_address("kernel32.dll","LoadLibraryExW"));
+            let load_library_exw_addr:FnLoadLibraryExW = mem::transmute(get_proc_address("kernel32.dll","LoadLibraryExW"));
             debug!("LoadLibraryExW Address: 0x{:X?}",load_library_exw_addr as i32);
 
             let hook = GenericDetour::<FnLoadLibraryExW>::new(load_library_exw_addr,hook_load_library_ex).unwrap();
@@ -45,7 +42,7 @@ lazy_static! {
 
     static ref GL_HOOKER: GenericDetour<FnGLSwapBuffers> = {
         unsafe{
-            let swap_buffers_addr:FnGLSwapBuffers = transmute(get_proc_address("gdi32.dll","SwapBuffers"));
+            let swap_buffers_addr:FnGLSwapBuffers = mem::transmute(get_proc_address("gdi32.dll","SwapBuffers"));
             debug!("SwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
 
             let hook = GenericDetour::<FnGLSwapBuffers>::new(swap_buffers_addr,wgl_swap_buffers).unwrap();
@@ -56,7 +53,7 @@ lazy_static! {
 
     static ref GLES_HOOKER: GenericDetour<FnEGLSwapBuffers> = {
         unsafe{
-            let swap_buffers_addr:FnEGLSwapBuffers = transmute(get_proc_address("libegl.dll","eglSwapBuffers"));
+            let swap_buffers_addr:FnEGLSwapBuffers = mem::transmute(get_proc_address("libegl.dll","eglSwapBuffers"));
             debug!("eglSwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
 
             let hook = GenericDetour::<FnEGLSwapBuffers>::new(swap_buffers_addr,egl_swap_buffers).unwrap();
@@ -96,7 +93,7 @@ fn load_overlay_mmfs(configs:&[OverlayConfigItem])->HashMap<String,MemoryMapping
     let mut map = HashMap::new();
     for config in configs.iter(){
         let mut mmf = MemoryMappingFile::new(config.mmf(),MMF_LENGTH);
-        unsafe{mmf.map()};
+        let _ = mmf.map();
         map.insert(config.mmf().to_string(),mmf);
     }
     map

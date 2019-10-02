@@ -187,17 +187,17 @@ impl UIRenderer for OpenGLRenderer {
             gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
 
             gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
-            let L = draw_data.display_pos[0];
-            let R = draw_data.display_pos[0] + draw_data.display_size[0];
-            let T = draw_data.display_pos[1];
-            let B = draw_data.display_pos[1] + draw_data.display_size[1];
+            let left = draw_data.display_pos[0];
+            let right = draw_data.display_pos[0] + draw_data.display_size[0];
+            let top = draw_data.display_pos[1];
+            let bottom = draw_data.display_pos[1] + draw_data.display_size[1];
 
             let ortho_projection:[[f32;4];4] =
                 [
-                    [  2.0/(R-L),        0.0,                 0.0, 0.0 ],
-                    [  0.0,              2.0/(T-B),           0.0, 0.0 ],
-                    [  0.0,              0.0,                -1.0, 0.0 ],
-                    [ (R+L)/(L-R),       (T+B)/(B-T),         0.0, 1.0 ],
+                    [  2.0/(right-left),         0.0,                       0.0, 0.0 ],
+                    [  0.0,                      2.0/(top-bottom),          0.0, 0.0 ],
+                    [  0.0,                      0.0,                      -1.0, 0.0 ],
+                    [ (right+left)/(left-right), (top+bottom)/(bottom-top), 0.0, 1.0 ],
                 ];
 
             gl::UseProgram(self.shader);
@@ -240,7 +240,6 @@ impl UIRenderer for OpenGLRenderer {
                             cmd_params:
                             DrawCmdParams {
                                 clip_rect,
-                                texture_id,
                                 ..
                         }} =>{
                             let clip:[u32;4]=[
@@ -259,9 +258,8 @@ impl UIRenderer for OpenGLRenderer {
                             idx_buffer_offset += count;
                         }
                         DrawCmd::ResetRenderState => (),
-                        DrawCmd::RawCallback { callback, raw_cmd } => unsafe {
-                            callback(cmd_list.raw(), raw_cmd)
-                        },
+                        DrawCmd::RawCallback { callback, raw_cmd } => callback(cmd_list.raw(), raw_cmd)
+                        ,
                     }
                 }
             }

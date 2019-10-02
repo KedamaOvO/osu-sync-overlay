@@ -82,7 +82,7 @@ impl<R> UI<R>
             let font_id = match File::open(&f.0) {
                 Ok(mut ttf)=> {
                     let mut buf = Vec::new();
-                    ttf.read_to_end(&mut buf);
+                    let _ = ttf.read_to_end(&mut buf);
                     let font_id = fonts.add_font(&[FontSource::TtfData {
                         data: buf.as_slice(),
                         size_pixels: f.1 as f32,
@@ -114,7 +114,7 @@ impl<R> UI<R>
         self.fonts = mmf_to_font_map;
 
         let fonts_tex = fonts.build_alpha8_texture();
-        info!("Build fonts texture");
+        info!("Builded fonts texture. Size: ({}x{})",fonts_tex.width,fonts_tex.height);
         self.renderer.upload_texture_data(fonts_tex.width,fonts_tex.height,fonts_tex.data)
     }
 
@@ -150,6 +150,8 @@ impl<R> UI<R>
             let bg = ui.push_style_color(StyleColor::WindowBg,config.background_color);
             let border = ui.push_style_color(StyleColor::Border,config.border_color);
             let title = CString::new(config.mmf()).unwrap();
+
+            debug!("[{}]window bg color: {:?}",config.mmf(),&config.background_color);
 
             let win = Window::new(unsafe{mem::transmute(title.as_c_str())})
                 .title_bar(false)
