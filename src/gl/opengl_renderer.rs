@@ -112,7 +112,7 @@ impl OpenGLRenderer {
             gl::UseProgram(renderer.shader);
             // Get uniform location
             renderer.texture_location = gl::GetUniformLocation(renderer.shader, mem::transmute(b"Texture\0"));
-            renderer.proj_matrix_location = gl::GetUniformLocation(renderer.shader, mem::transmute("ProjMtx\0".as_ptr()));
+            renderer.proj_matrix_location = gl::GetUniformLocation(renderer.shader, mem::transmute(b"ProjMtx\0".as_ptr()));
             renderer.position_location = gl::GetAttribLocation(renderer.shader, mem::transmute(b"Position\0".as_ptr()));
             renderer.uv_location = gl::GetAttribLocation(renderer.shader, mem::transmute(b"UV\0".as_ptr()));
             renderer.color_location = gl::GetAttribLocation(renderer.shader, mem::transmute(b"Color\0".as_ptr()));
