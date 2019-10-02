@@ -30,7 +30,6 @@ pub struct OpenGLRenderer {
 
     texture:GLuint,
     hdc:HDC,
-    frame_size:(u32,u32)
 }
 
 impl OpenGLRenderer {
@@ -54,7 +53,6 @@ impl OpenGLRenderer {
 
 
     pub fn init(hdc:HDC) -> Self {
-        let frame_size = get_wgl_window_size(hdc);
         let mut renderer = OpenGLRenderer {
             vbos: [0,0,0],
             ibos: [0,0,0],
@@ -69,7 +67,6 @@ impl OpenGLRenderer {
             shader: 0,
             texture: 0,
             hdc,
-            frame_size
         };
 
         unsafe {
@@ -131,7 +128,7 @@ impl OpenGLRenderer {
 
 impl UIRenderer for OpenGLRenderer {
     fn get_frame_size(&self) -> (u32, u32) {
-        self.frame_size
+        get_wgl_window_size(self.hdc)
     }
 
     fn upload_texture_data(&mut self,w:u32,h:u32,pixels:&[u8]){
@@ -144,7 +141,7 @@ impl UIRenderer for OpenGLRenderer {
         }
     }
 
-    fn render(&mut self, draw_data: &DrawData) {
+    fn render(&mut self,w:u32,h:u32,draw_data: &DrawData) {
         unsafe {
             // Backup GL state
             let last_active_texture: GLenum = 0;
@@ -189,7 +186,6 @@ impl UIRenderer for OpenGLRenderer {
             gl::Enable(gl::SCISSOR_TEST);
             gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
 
-            let (w,h) = self.frame_size;
             gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
             let L = draw_data.display_pos[0];
             let R = draw_data.display_pos[0] + draw_data.display_size[0];
@@ -212,7 +208,7 @@ impl UIRenderer for OpenGLRenderer {
                 let mut idx_buffer_offset = 0;
                 let vbo = self.vbos[self.index];
                 let ibo = self.ibos[self.index];
-                debug!("Select vbo:{} ibo:{}",vbo,ibo);
+
                 self.index = (self.index + 1) % self.vbos.len();
 
                 gl::BindBuffer(gl::ARRAY_BUFFER,vbo);
@@ -221,8 +217,6 @@ impl UIRenderer for OpenGLRenderer {
                                mem::transmute(vtx_buffer.len() * mem::size_of::<DrawVert>()),
                                mem::transmute(vtx_buffer.as_ptr()),
                                 gl::STREAM_DRAW);
-
-                debug!("uvs: {:?}",vtx_buffer.iter().map(|v|v.uv));
 
                 let idx_buffer = cmd_list.idx_buffer();
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER,ibo);

@@ -1,8 +1,5 @@
-#version 120
-
-#ifdef GL_ES
-    precision mediump float;
-#endif
+#version 100
+precision mediump float;
 
 uniform sampler2D Texture;
 varying vec2 Frag_UV;

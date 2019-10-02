@@ -95,9 +95,9 @@ const MMF_LENGTH:usize = 4096;
 fn load_overlay_mmfs(configs:&[OverlayConfigItem])->HashMap<String,MemoryMappingFile>{
     let mut map = HashMap::new();
     for config in configs.iter(){
-        let mut mmf = MemoryMappingFile::new(config.mmf.as_str(),MMF_LENGTH);
+        let mut mmf = MemoryMappingFile::new(config.mmf(),MMF_LENGTH);
         unsafe{mmf.map()};
-        map.insert(config.mmf.clone(),mmf);
+        map.insert(config.mmf().to_string(),mmf);
     }
     map
 }
@@ -116,7 +116,7 @@ fn init_config(){
     unsafe{
         GLOBAL_CONFIG = Some(GlobalConfig::new(MemoryMappingFile::new("Local\\rtpp-overlay-global-config",mem::size_of::<GlobalConfig>())));
         OVERLAY_CONFIG = Some(OverlayConfig::new(MemoryMappingFile::new("Local\\rtpp-overlay-configs",MMF_OVERLAY_CONFIG_LENGTH)));
-        OVERLAY_MMFS = Some(load_overlay_mmfs(OVERLAY_CONFIG.as_ref().unwrap().config_items.as_slice()));
+        OVERLAY_MMFS = Some(load_overlay_mmfs(OVERLAY_CONFIG.as_ref().unwrap().config_items));
     }
 }
 
@@ -207,7 +207,6 @@ extern "stdcall" fn wgl_swap_buffers(hdc:HDC) -> BOOL{
 }
 
 extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGLBoolean{
-    info!("GLES");
     unsafe {
         match &mut GLES_UI{
             None=>{

@@ -29,7 +29,6 @@ pub struct GLESRenderer {
 
     texture:GLuint,
 
-    frame_size:(u32,u32),
     display: EGLDisplay,
     surface: EGLSurface,
 }
@@ -54,7 +53,6 @@ impl GLESRenderer {
     }
 
     pub fn init(display: EGLDisplay, surface: EGLSurface)->Self{
-        let frame_size = get_egl_window_size(display,surface);
         let mut renderer = GLESRenderer {
             vbos: [0,0,0],
             ibos: [0,0,0],
@@ -70,7 +68,6 @@ impl GLESRenderer {
             texture: 0,
             display,
             surface,
-            frame_size
         };
 
         unsafe {
@@ -88,9 +85,9 @@ impl GLESRenderer {
             renderer.shader = gl::CreateProgram();
 
             // Build shader
-            let vs_bytes = include_bytes!("shaders/gl2_vert.glsl");
+            let vs_bytes = include_bytes!("shaders/gles2_vert.glsl");
             let vs_bytes_len = vs_bytes.len() as i32;
-            let fs_bytes = include_bytes!("shaders/gl2_frag.glsl");
+            let fs_bytes = include_bytes!("shaders/gles2_frag.glsl");
             let fs_bytes_len = fs_bytes.len() as i32;
             gl::ShaderSource(vs, 1, mem::transmute(&vs_bytes.as_ptr()), &vs_bytes_len as *const _);
             gl::ShaderSource(fs, 1, mem::transmute(&fs_bytes.as_ptr()), &fs_bytes_len as *const _);
@@ -132,7 +129,7 @@ impl GLESRenderer {
 
 impl UIRenderer for GLESRenderer{
     fn get_frame_size(&self) -> (u32, u32) {
-        self.frame_size
+        get_egl_window_size(self.display,self.surface)
     }
 
     fn upload_texture_data(&mut self, w: u32, h: u32, pixels: &[u8]) {
@@ -145,7 +142,7 @@ impl UIRenderer for GLESRenderer{
         }
     }
 
-    fn render(&mut self, draw_data: &DrawData) {
+    fn render(&mut self,w:u32,h:u32,draw_data: &DrawData) {
         unsafe {
             // Backup GL state
             let last_active_texture: GLenum = 0;
@@ -187,7 +184,6 @@ impl UIRenderer for GLESRenderer{
             gl::Disable(gl::DEPTH_TEST);
             gl::Enable(gl::SCISSOR_TEST);
 
-            let (w,h) = self.frame_size;
             gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
             let L = draw_data.display_pos[0];
             let R = draw_data.display_pos[0] + draw_data.display_size[0];
@@ -210,6 +206,7 @@ impl UIRenderer for GLESRenderer{
                 let mut idx_buffer_offset = 0;
                 let vbo = self.vbos[self.index];
                 let ibo = self.ibos[self.index];
+
                 self.index = (self.index + 1) % self.vbos.len();
 
                 gl::BindBuffer(gl::ARRAY_BUFFER,vbo);
@@ -232,6 +229,7 @@ impl UIRenderer for GLESRenderer{
                 gl::VertexAttribPointer(self.position_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 0 as *const GLvoid);
                 gl::VertexAttribPointer(self.uv_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 8 as *const GLvoid);
                 gl::VertexAttribPointer(self.color_location as u32, 4, gl::UNSIGNED_BYTE, gl::TRUE, mem::size_of::<DrawVert>() as i32, 16 as *const GLvoid);
+
 
                 for cmd in cmd_list.commands(){
                     match cmd{

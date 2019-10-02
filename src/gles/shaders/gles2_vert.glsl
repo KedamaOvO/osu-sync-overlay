@@ -1,7 +1,5 @@
-#version 120
-#ifdef GL_ES
+#version 100
 precision mediump float;
-#endif
 
 uniform mat4 ProjMtx;
 attribute vec2 Position;

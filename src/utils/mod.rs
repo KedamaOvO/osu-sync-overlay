@@ -58,6 +58,6 @@ pub fn get_egl_window_size(display: EGLDisplay, surface: EGLSurface) -> (u32, u3
         let mut w = 0;
         eglQuerySurface.unwrap()(display, surface, EGL_HEIGHT, &mut h);
         eglQuerySurface.unwrap()(display, surface, EGL_WIDTH, &mut w);
-        return (w as u32, h as u32);
+        (w as u32, h as u32)
     }
 }

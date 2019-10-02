@@ -72,13 +72,13 @@ impl<R> UI<R>
         let mut font_set = HashSet::new();
 
         for config in configs.iter() {
-            let path = config.font_path.as_str();
-            font_set.insert((path.to_string(),config.font_size));
+            let path = config.font_path();
+            font_set.insert((path,config.font_size));
         }
 
         let font_glyph_ranges = &self.font_glyph_ranges;
         // Add fonts
-        let ids:Vec<((&String,i32),FontId)> = font_set.iter().map(|f|{
+        let ids:Vec<((&str,i32),FontId)> = font_set.iter().map(|f|{
             let font_id = match File::open(&f.0) {
                 Ok(mut ttf)=> {
                     let mut buf = Vec::new();
@@ -98,14 +98,14 @@ impl<R> UI<R>
                     default_font
                 }
             };
-            info!("Added font({}, {})",(f.0).as_str(),f.1);
-            ((&f.0,f.1),font_id)
+            info!("Added font({}, {})",f.0,f.1);
+            ((f.0,f.1),font_id)
         }).collect();
 
         // MMF -> FontId
         for config in configs.iter(){
-            let key = config.mmf.as_str();
-            let path = &config.font_path;
+            let key = config.mmf();
+            let path = config.font_path();
 
             let r = ids.iter().find(|t| t.0 == (path,config.font_size)).unwrap();
             mmf_to_font_map.insert(key.to_string(),r.1);
@@ -128,11 +128,11 @@ impl<R> UI<R>
         let now = self.ctx.io_mut().update_delta_time(self.prev_time);
         self.prev_time = now;
 
-        let frame_size= self.renderer.get_frame_size();
-        self.ctx.io_mut().display_size = [frame_size.0 as f32,frame_size.1 as f32];
+        let (w,h)= self.renderer.get_frame_size();
+        self.ctx.io_mut().display_size = [w as f32,h as f32];
 
         self.layout(&config.config_items,mmfs,|renderer,layout_data|{
-            renderer.render(layout_data)
+            renderer.render(w,h,layout_data,)
         });
     }
 
@@ -142,20 +142,14 @@ impl<R> UI<R>
         mmfs:&HashMap<String,MemoryMappingFile>,
         render:F)
     {
+        let [w,h] = self.ctx.io().display_size;
         let dt = self.ctx.io().delta_time;
         let ui = self.ctx.frame();
-
-        Window::new(im_str!("123"))
-            .title_bar(true)
-            .always_auto_resize(true)
-            .build(&ui,||{
-                ui.text("ASD");
-            });
 
         for config in configs.iter() {
             let bg = ui.push_style_color(StyleColor::WindowBg,config.background_color);
             let border = ui.push_style_color(StyleColor::Border,config.border_color);
-            let title = CString::new(config.mmf.as_str()).unwrap();
+            let title = CString::new(config.mmf()).unwrap();
 
             let win = Window::new(unsafe{mem::transmute(title.as_c_str())})
                 .title_bar(false)
@@ -169,11 +163,11 @@ impl<R> UI<R>
                 .begin(&ui)
                 .unwrap();
 
-            let fontid = self.fonts.get(config.mmf.as_str());
+            let fontid = self.fonts.get(config.mmf());
             let font = match fontid {
                 Some(f) => ui.push_font(*f),
                 None => {
-                    self.error_messages.push(format!("[MMF: {}] Can't load Font({}, {}). use default font.", config.mmf, config.font_path, config.font_path));
+                    self.error_messages.push(format!("[MMF: {}] Can't load Font({}, {}). use default font.", config.mmf(), config.font_path(), config.font_size));
                     if !self.error_messages.is_empty() && self.error_window_eta <= 0.0 {
                         self.error_window_eta = ERROR_WINDOW_ETA;
                     }
@@ -182,7 +176,7 @@ impl<R> UI<R>
                 }
             };
 
-            let mmf = mmfs.get(config.mmf.as_str()).unwrap();
+            let mmf = mmfs.get(config.mmf()).unwrap();
             let text = unsafe { CStr::from_ptr(mmf.get_ptr().unwrap() as *const c_char).to_str().unwrap() };
             ui.text_colored(config.text_color, text);
 
@@ -194,8 +188,6 @@ impl<R> UI<R>
             win.end(&ui);
         }
 
-        let (w,h) = self.renderer.get_frame_size();
-
         if !self.error_messages.is_empty(){
             let win = Window::new(im_str!("error-window"))
                 .title_bar(false)
@@ -203,7 +195,7 @@ impl<R> UI<R>
                 .save_settings(false)
                 .mouse_inputs(false)
                 .no_inputs()
-                .position([w as f32 / 2.0 ,(h * 5) as f32 / 6.0 ],Condition::Always)
+                .position([w / 2.0 ,h * 5.0 / 6.0 ],Condition::Always)
                 .position_pivot([0.5f32,0.5f32])
                 .begin(&ui)
                 .unwrap();
