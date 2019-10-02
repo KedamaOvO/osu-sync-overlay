@@ -77,15 +77,17 @@ impl<R> UI<R>
         }
 
         let font_glyph_ranges = &self.font_glyph_ranges;
+        let msgs = &mut self.error_messages;
+        let eta = &mut self.error_window_eta;
         // Add fonts
-        let ids:Vec<((&str,i32),FontId)> = font_set.iter().map(|f|{
-            let font_id = match File::open(&f.0) {
+        let ids:Vec<((&str,i32),FontId)> = font_set.iter().map(|&(path,size)|{
+            let font_id = match File::open(path) {
                 Ok(mut ttf)=> {
                     let mut buf = Vec::new();
                     let _ = ttf.read_to_end(&mut buf);
                     let font_id = fonts.add_font(&[FontSource::TtfData {
                         data: buf.as_slice(),
-                        size_pixels: f.1 as f32,
+                        size_pixels: size as f32,
                         config: Some(FontConfig {
                             glyph_ranges: font_glyph_ranges.get(glyph_ranges).unwrap().clone(),
                             ..FontConfig::default()
@@ -94,12 +96,15 @@ impl<R> UI<R>
                     font_id
                 }
                 _ => {
-                    error!("Can't open {}",&f.0);
+                    let msg = format!("Can't load Font({}, {}). use default font.",path, size);
+                    error!("{}",msg);
+                    msgs.push(msg);
+                    *eta = ERROR_WINDOW_ETA;
                     default_font
                 }
             };
-            info!("Added font({}, {})",f.0,f.1);
-            ((f.0,f.1),font_id)
+            info!("Added font({}, {})",path,size);
+            ((path,size),font_id)
         }).collect();
 
         // MMF -> FontId
@@ -171,7 +176,7 @@ impl<R> UI<R>
             let font = match fontid {
                 Some(f) => ui.push_font(*f),
                 None => {
-                    self.error_messages.push(format!("[MMF: {}] Can't load Font({}, {}). use default font.", config.mmf(), config.font_path(), config.font_size));
+                    self.error_messages.push(format!("[MMF: {}] Can't set Font({}, {}). use default font.", config.mmf(), config.font_path(), config.font_size));
                     if !self.error_messages.is_empty() && self.error_window_eta <= 0.0 {
                         self.error_window_eta = ERROR_WINDOW_ETA;
                     }
@@ -209,7 +214,9 @@ impl<R> UI<R>
             for msg in self.error_messages.iter() {
                 ui.text_colored([1.0, 1.0, 1.0, 1.0], msg);
             }
-            ui.text_colored([0.0, 1.0, 0.0, 1.0], format!("Close window after {}(s)", self.error_window_eta));
+            let font = ui.push_font(*self.fonts.get("__default__").unwrap());
+            ui.text_colored([0.0, 1.0, 0.0, 1.0], format!("Close window after {:.2}(s)", self.error_window_eta));
+            font.pop(&ui);
             win.end(&ui);
             self.error_window_eta -= dt;
             if self.error_window_eta < 0.0{
