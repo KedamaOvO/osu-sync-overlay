@@ -147,11 +147,13 @@ impl<R> UI<R>
         let ui = self.ctx.frame();
 
         for config in configs.iter() {
+            if !config.visibility{
+                continue;
+            }
+
             let bg = ui.push_style_color(StyleColor::WindowBg,config.background_color);
             let border = ui.push_style_color(StyleColor::Border,config.border_color);
             let title = CString::new(config.mmf()).unwrap();
-
-            debug!("[{}]window bg color: {:?}",config.mmf(),&config.background_color);
 
             let win = Window::new(unsafe{mem::transmute(title.as_c_str())})
                 .title_bar(false)

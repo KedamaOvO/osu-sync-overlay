@@ -203,7 +203,6 @@ impl UIRenderer for GLESRenderer{
             gl::UniformMatrix4fv(self.proj_matrix_location, 1, gl::FALSE, &ortho_projection[0][0]);
 
             for cmd_list in draw_data.draw_lists(){
-                let mut idx_buffer_offset = 0;
                 let vbo = self.vbos[self.index];
                 let ibo = self.ibos[self.index];
 
@@ -230,7 +229,7 @@ impl UIRenderer for GLESRenderer{
                 gl::VertexAttribPointer(self.uv_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 8 as *const GLvoid);
                 gl::VertexAttribPointer(self.color_location as u32, 4, gl::UNSIGNED_BYTE, gl::TRUE, mem::size_of::<DrawVert>() as i32, 16 as *const GLvoid);
 
-
+                gl::BindTexture(gl::TEXTURE_2D, self.texture);
                 for cmd in cmd_list.commands(){
                     match cmd{
                         DrawCmd::Elements {
@@ -238,6 +237,7 @@ impl UIRenderer for GLESRenderer{
                             cmd_params:
                             DrawCmdParams {
                                 clip_rect,
+                                idx_offset,
                                 ..
                             }} =>{
                             let clip:[u32;4]=[
@@ -248,12 +248,9 @@ impl UIRenderer for GLESRenderer{
                             ];
 
                             if clip[0] < w && clip_rect[1] < h as f32 && clip_rect[2] >= 0.0 && clip_rect[3] >= 0.0{
-                                gl::BindTexture(gl::TEXTURE_2D, self.texture);
                                 gl::Scissor(clip[0] as i32, (h - clip[3]) as i32, (clip[2] - clip[0]) as i32, (clip_rect[3] - clip_rect[1]) as i32);
-                                gl::DrawElements(gl::TRIANGLES, count as i32, gl::UNSIGNED_SHORT, idx_buffer_offset as *const c_void);
+                                gl::DrawElements(gl::TRIANGLES, count as i32, gl::UNSIGNED_SHORT, (idx_offset*2) as *const c_void);
                             }
-
-                            idx_buffer_offset += count;
                         }
                         DrawCmd::ResetRenderState => (),
                         DrawCmd::RawCallback { callback, raw_cmd } => callback(cmd_list.raw(), raw_cmd),

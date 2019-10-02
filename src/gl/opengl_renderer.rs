@@ -155,8 +155,6 @@ impl UIRenderer for OpenGLRenderer {
             gl::GetIntegerv(gl::ARRAY_BUFFER_BINDING, mem::transmute(&last_array_buffer));
             let last_element_buffer:GLint = 0;
             gl::GetIntegerv(gl::ELEMENT_ARRAY_BUFFER_BINDING,mem::transmute(&last_element_buffer));
-            let last_polygon_mode:[GLint;2] = [0,0];
-            gl::GetIntegerv(gl::POLYGON_MODE, mem::transmute(&last_polygon_mode));
             let last_viewport:[GLint;4] = [0,0,0,0];
             gl::GetIntegerv(gl::VIEWPORT, mem::transmute(&last_viewport));
             let last_scissor_box:[GLint;4] = [0,0,0,0];
@@ -184,7 +182,6 @@ impl UIRenderer for OpenGLRenderer {
             gl::Disable(gl::CULL_FACE);
             gl::Disable(gl::DEPTH_TEST);
             gl::Enable(gl::SCISSOR_TEST);
-            gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
 
             gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
             let left = draw_data.display_pos[0];
@@ -205,7 +202,6 @@ impl UIRenderer for OpenGLRenderer {
             gl::UniformMatrix4fv(self.proj_matrix_location, 1, gl::FALSE, &ortho_projection[0][0]);
 
             for cmd_list in draw_data.draw_lists(){
-                let mut idx_buffer_offset = 0;
                 let vbo = self.vbos[self.index];
                 let ibo = self.ibos[self.index];
 
@@ -232,7 +228,7 @@ impl UIRenderer for OpenGLRenderer {
                 gl::VertexAttribPointer(self.uv_location as u32, 2, gl::FLOAT, gl::FALSE, mem::size_of::<DrawVert>() as i32, 8 as *const GLvoid);
                 gl::VertexAttribPointer(self.color_location as u32, 4, gl::UNSIGNED_BYTE, gl::TRUE, mem::size_of::<DrawVert>() as i32, 16 as *const GLvoid);
 
-
+                gl::BindTexture(gl::TEXTURE_2D, self.texture);
                 for cmd in cmd_list.commands(){
                     match cmd{
                         DrawCmd::Elements {
@@ -240,6 +236,7 @@ impl UIRenderer for OpenGLRenderer {
                             cmd_params:
                             DrawCmdParams {
                                 clip_rect,
+                                idx_offset,
                                 ..
                         }} =>{
                             let clip:[u32;4]=[
@@ -250,12 +247,9 @@ impl UIRenderer for OpenGLRenderer {
                             ];
 
                             if clip[0] < w && clip_rect[1] < h as f32 && clip_rect[2] >= 0.0 && clip_rect[3] >= 0.0{
-                                gl::BindTexture(gl::TEXTURE_2D, self.texture);
                                 gl::Scissor(clip[0] as i32, (h - clip[3]) as i32, (clip[2] - clip[0]) as i32, (clip_rect[3] - clip_rect[1]) as i32);
-                                gl::DrawElements(gl::TRIANGLES, count as i32, gl::UNSIGNED_SHORT, idx_buffer_offset as *const c_void);
+                                gl::DrawElements(gl::TRIANGLES, count as i32, gl::UNSIGNED_SHORT, (idx_offset*2) as *const c_void);
                             }
-
-                            idx_buffer_offset += count;
                         }
                         DrawCmd::ResetRenderState => (),
                         DrawCmd::RawCallback { callback, raw_cmd } => callback(cmd_list.raw(), raw_cmd)
@@ -296,7 +290,6 @@ impl UIRenderer for OpenGLRenderer {
                 gl::Disable(gl::SCISSOR_TEST);
             }
 
-            gl::PolygonMode(gl::FRONT_AND_BACK, last_polygon_mode[0] as GLenum);
             gl::Viewport(last_viewport[0], last_viewport[1], last_viewport[2], last_viewport[3]);
             gl::Scissor(last_scissor_box[0], last_scissor_box[1], last_scissor_box[2], last_scissor_box[3]);
         }
