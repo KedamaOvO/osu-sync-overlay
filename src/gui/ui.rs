@@ -114,7 +114,7 @@ impl<R> UI<R>
         self.fonts = mmf_to_font_map;
 
         let fonts_tex = fonts.build_alpha8_texture();
-        info!("Builded fonts texture. Size: ({}x{})",fonts_tex.width,fonts_tex.height);
+        info!("Builded fonts texture({}x{})",fonts_tex.width,fonts_tex.height);
         self.renderer.upload_texture_data(fonts_tex.width,fonts_tex.height,fonts_tex.data)
     }
 
@@ -182,7 +182,9 @@ impl<R> UI<R>
 
             let mmf = mmfs.get(config.mmf()).unwrap();
             let text = unsafe { CStr::from_ptr(mmf.get_ptr().unwrap() as *const c_char).to_str().unwrap() };
+            ui.set_window_font_scale(config.font_scale);
             ui.text_colored(config.text_color, text);
+            ui.set_window_font_scale(1.0);
 
             font.pop(&ui);
 

@@ -5,16 +5,20 @@ authors = ["KedamaOvO <moe@mao-yu.net>"]
 edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations.
+panic = 'abort'     # Abort on panic
+
 [lib]
 name = "overlay"
 crate-type = ["dylib"]
 
 [dependencies]
-winapi = {version = "0.3.7",features = ["wingdi","libloaderapi","memoryapi","handleapi","winuser"]}
+winapi = {version = "0.3.8",features = ["wingdi","libloaderapi","memoryapi","handleapi","winuser"]}
 detour = {version = "0.7.0",default-features = false}
 imgui = "0.2.1"
 lazy_static = "1.4.0"
-libc = "*"
-log = "0.4.6"
-simplelog = "^0.5.0"
+log = "0.4.8"
+simplelog = "0.7.3"
 widestring = "0.4.0"
