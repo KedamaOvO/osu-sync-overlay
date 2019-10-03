@@ -82,6 +82,7 @@ impl<F:Frame> UI<F>
         let font_glyph_ranges = &self.font_glyph_ranges;
         let msgs = &mut self.error_messages;
         let eta = &mut self.error_window_eta;
+        msgs.clear();
         // Add fonts
         let ids:Vec<((&str,i32),FontId)> = font_set.iter().map(|&(path,size)|{
             let font_id = match File::open(path) {
@@ -101,13 +102,16 @@ impl<F:Frame> UI<F>
                     let msg = format!("Can't load Font({}, {}). use default font.",path, size);
                     error!("{}",msg);
                     msgs.push(msg);
-                    *eta = ERROR_WINDOW_ETA;
                     default_font
                 }
             };
             info!("Added font({}, {})",path,size);
             ((path,size),font_id)
         }).collect();
+
+        if !msgs.is_empty() {
+            *eta = ERROR_WINDOW_ETA;
+        }
 
         // MMF -> FontId
         for config in configs.iter(){

@@ -12,24 +12,24 @@ type FnEglQuerySurface = extern "stdcall" fn(EGLDisplay, EGLSurface, EGLint, *mu
 const EGL_HEIGHT: EGLint = 0x3056;
 const EGL_WIDTH: EGLint = 0x3057;
 
-pub struct EGLFrame{
-    display:EGLDisplay,
-    surface:EGLSurface,
+pub struct EGLFrame {
+    display: EGLDisplay,
+    surface: EGLSurface,
 
-    egl_query_surface:FnEglQuerySurface,
+    egl_query_surface: FnEglQuerySurface,
 }
 
-impl EGLFrame{
-    pub fn new(display:EGLDisplay,surface:EGLSurface)->Self{
-        EGLFrame{
+impl EGLFrame {
+    pub fn new(display: EGLDisplay, surface: EGLSurface) -> Self {
+        EGLFrame {
             display,
             surface,
-            egl_query_surface:unsafe{mem::transmute(get_proc_address("libegl.dll", "eglQuerySurface"))}
+            egl_query_surface: unsafe { mem::transmute(get_proc_address("libegl.dll", "eglQuerySurface")) },
         }
     }
 }
 
-impl Frame for EGLFrame{
+impl Frame for EGLFrame {
     fn get_frame_size(&self) -> (u32, u32) {
         let mut h = 0;
         let mut w = 0;
