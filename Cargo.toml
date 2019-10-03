@@ -15,8 +15,8 @@ name = "overlay"
 crate-type = ["dylib"]
 
 [dependencies]
-winapi = {version = "0.3.8",features = ["wingdi","libloaderapi","memoryapi","handleapi","winuser"]}
-detour = {version = "0.7.0",default-features = false}
+winapi = {version = "0.3.7",features = ["libloaderapi","memoryapi","handleapi","winuser"]}
+detour = {version = "0.7.1",default-features = false}
 imgui = "0.2.1"
 lazy_static = "1.4.0"
 log = "0.4.8"

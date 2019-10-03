@@ -1,4 +1,4 @@
-use crate::renderer::frame::frame::Frame;
+use crate::renderer::frame::Frame;
 use crate::utils::get_proc_address;
 use std::mem;
 

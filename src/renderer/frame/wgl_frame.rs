@@ -1,5 +1,5 @@
 use winapi::shared::windef::{HDC,RECT};
-use crate::renderer::frame::frame::Frame;
+use crate::renderer::frame::Frame;
 use winapi::um::winuser;
 
 pub struct WGLFrame{
@@ -25,7 +25,7 @@ impl Frame for WGLFrame{
                 bottom: 0,
             };
             winuser::GetClientRect(hwnd, &mut rect);
-            return (rect.right as u32, rect.bottom as u32);
+            (rect.right as u32, rect.bottom as u32)
         }
     }
 }

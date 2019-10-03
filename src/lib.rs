@@ -29,33 +29,33 @@ lazy_static! {
     static ref LOAD_LIBRARY_EX_HOOKER: GenericDetour<FnLoadLibraryExW> = {
         unsafe{
             let load_library_exw_addr:FnLoadLibraryExW = mem::transmute(get_proc_address("kernel32.dll","LoadLibraryExW"));
-            debug!("LoadLibraryExW Address: 0x{:X?}",load_library_exw_addr as i32);
+            debug!("LoadLibraryExW Address: 0x{:X?}",load_library_exw_addr as usize);
 
             let hook = GenericDetour::<FnLoadLibraryExW>::new(load_library_exw_addr,hook_load_library_ex).unwrap();
             hook.enable().unwrap();
-            return hook;
+            hook
         }
     };
 
     static ref GL_HOOKER: GenericDetour<FnGLSwapBuffers> = {
         unsafe{
             let swap_buffers_addr:FnGLSwapBuffers = mem::transmute(get_proc_address("gdi32.dll","SwapBuffers"));
-            debug!("SwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
+            debug!("SwapBuffers Address: 0x{:X?}",swap_buffers_addr as usize);
 
             let hook = GenericDetour::<FnGLSwapBuffers>::new(swap_buffers_addr,wgl_swap_buffers).unwrap();
             hook.enable().unwrap();
-            return hook;
+            hook
         }
     };
 
     static ref GLES_HOOKER: GenericDetour<FnEGLSwapBuffers> = {
         unsafe{
             let swap_buffers_addr:FnEGLSwapBuffers = mem::transmute(get_proc_address("libegl.dll","eglSwapBuffers"));
-            debug!("eglSwapBuffers Address: 0x{:X?}",swap_buffers_addr as i32);
+            debug!("eglSwapBuffers Address: 0x{:X?}",swap_buffers_addr as usize);
 
             let hook = GenericDetour::<FnEGLSwapBuffers>::new(swap_buffers_addr,egl_swap_buffers).unwrap();
             hook.enable().unwrap();
-            return hook;
+            hook
         }
     };
 }
@@ -77,7 +77,7 @@ pub extern "stdcall" fn DllMain(
         _ => ()
     }
 
-    return TRUE;
+    TRUE
 }
 
 static mut GLOBAL_CONFIG : Option<GlobalConfig> = None;
@@ -154,7 +154,7 @@ extern "stdcall" fn hook_load_library_ex(lpLibFileName:LPCWSTR,hFile:HANDLE,dwFl
         }
     }
 
-    return module;
+    module
 }
 
 static mut GL_UI:Option<UI<WGLFrame>> = None;
@@ -183,9 +183,9 @@ extern "stdcall" fn wgl_swap_buffers(hdc:HDC) -> BOOL{
                 let wgl = WGLFrame::new(hdc);
                 let renderer = UIRenderer::init(GLLoader::init());
                 GL_UI = Some(UI::init(renderer,wgl));
-                GL_UI.as_mut().map(|ui|{
+                if let Some(ui) = GL_UI.as_mut() {
                     check_config_changed(ui,true);
-                });
+                }
                 info!("GL Initialized");
             }
             Some(ui)=>{
@@ -193,11 +193,11 @@ extern "stdcall" fn wgl_swap_buffers(hdc:HDC) -> BOOL{
             }
         }
 
-        GL_UI.as_mut().map(|ui|{
+        if let Some(ui) = GL_UI.as_mut() {
             check_config_changed(ui,false);
-        });
+        }
     }
-    return (*GL_HOOKER).call(hdc);
+    (*GL_HOOKER).call(hdc)
 }
 
 extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGLBoolean{
@@ -207,9 +207,9 @@ extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGL
                 let egl = EGLFrame::new(display,surface);
                 let renderer = UIRenderer::init(GLESLoader::init());
                 GLES_UI = Some(UI::init(renderer,egl));
-                GLES_UI.as_mut().map(|ui|{
+                if let Some(ui) = GLES_UI.as_mut() {
                     check_config_changed(ui,true);
-                });
+                }
                 info!("GLES Initialized");
             }
             Some(ui)=>{
@@ -217,10 +217,10 @@ extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGL
             }
         }
 
-        GLES_UI.as_mut().map(|ui|{
+        if let Some(ui) = GLES_UI.as_mut() {
             check_config_changed(ui,false);
-        });
+        }
     }
 
-    return (*GLES_HOOKER).call(display,surface);
+    (*GLES_HOOKER).call(display,surface)
 }

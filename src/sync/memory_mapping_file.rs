@@ -24,7 +24,7 @@ impl MemoryMappingFile{
         let mmf = unsafe{memoryapi::CreateFileMappingW(INVALID_HANDLE_VALUE,null_mut(),PAGE_READWRITE,0,size as u32,name_os.as_ptr())};
         MemoryMappingFile{
             mmf_handle:mmf,
-            size:size,
+            size,
 
             mapped_ptr:null_mut(),
         }

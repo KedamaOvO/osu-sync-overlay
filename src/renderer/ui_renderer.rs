@@ -86,11 +86,11 @@ impl UIRenderer {
 
             gl::UseProgram(renderer.shader);
             // Get uniform location
-            renderer.texture_location = gl::GetUniformLocation(renderer.shader, mem::transmute(b"Texture\0"));
-            renderer.proj_matrix_location = gl::GetUniformLocation(renderer.shader, mem::transmute(b"ProjMtx\0".as_ptr()));
-            renderer.position_location = gl::GetAttribLocation(renderer.shader, mem::transmute(b"Position\0".as_ptr()));
-            renderer.uv_location = gl::GetAttribLocation(renderer.shader, mem::transmute(b"UV\0".as_ptr()));
-            renderer.color_location = gl::GetAttribLocation(renderer.shader, mem::transmute(b"Color\0".as_ptr()));
+            renderer.texture_location = gl::GetUniformLocation(renderer.shader, b"Texture\0".as_ptr() as *const _);
+            renderer.proj_matrix_location = gl::GetUniformLocation(renderer.shader, b"ProjMtx\0".as_ptr() as *const _);
+            renderer.position_location = gl::GetAttribLocation(renderer.shader, b"Position\0".as_ptr() as *const _);
+            renderer.uv_location = gl::GetAttribLocation(renderer.shader, b"UV\0".as_ptr() as *const _);
+            renderer.color_location = gl::GetAttribLocation(renderer.shader, b"Color\0".as_ptr() as *const _);
 
             // Restore modified GL state
             gl::BindTexture(gl::TEXTURE_2D, last_texture as GLuint);
@@ -115,9 +115,9 @@ impl UIRenderer {
             let last_element_buffer:GLint = 0;
             gl::GetIntegerv(gl::ELEMENT_ARRAY_BUFFER_BINDING,mem::transmute(&last_element_buffer));
             let last_viewport:[GLint;4] = [0,0,0,0];
-            gl::GetIntegerv(gl::VIEWPORT, mem::transmute(&last_viewport));
+            gl::GetIntegerv(gl::VIEWPORT, mem::transmute(last_viewport.as_ptr()));
             let last_scissor_box:[GLint;4] = [0,0,0,0];
-            gl::GetIntegerv(gl::SCISSOR_BOX, mem::transmute(&last_scissor_box));
+            gl::GetIntegerv(gl::SCISSOR_BOX, mem::transmute(last_scissor_box.as_ptr()));
             let last_blend_src_rgb:GLenum = 0;
             gl::GetIntegerv(gl::BLEND_SRC_RGB, mem::transmute(&last_blend_src_rgb));
             let last_blend_dst_rgb:GLenum = 0;
@@ -169,15 +169,15 @@ impl UIRenderer {
                 gl::BindBuffer(gl::ARRAY_BUFFER,vbo);
                 let vtx_buffer = cmd_list.vtx_buffer();
                 gl::BufferData(gl::ARRAY_BUFFER,
-                               mem::transmute(vtx_buffer.len() * mem::size_of::<DrawVert>()),
-                               mem::transmute(vtx_buffer.as_ptr()),
+                               (vtx_buffer.len() * mem::size_of::<DrawVert>()) as isize,
+                               vtx_buffer.as_ptr() as *const _,
                                gl::STREAM_DRAW);
 
                 let idx_buffer = cmd_list.idx_buffer();
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER,ibo);
                 gl::BufferData(gl::ELEMENT_ARRAY_BUFFER,
-                               mem::transmute(idx_buffer.len() * mem::size_of::<u16>()),
-                               mem::transmute(idx_buffer.as_ptr()),
+                               (idx_buffer.len() * mem::size_of::<u16>()) as isize,
+                               idx_buffer.as_ptr() as *const _,
                                gl::STREAM_DRAW);
 
                 gl::EnableVertexAttribArray(self.position_location as u32);
@@ -269,7 +269,7 @@ impl Drop for UIRenderer{
         unsafe{
             gl::DeleteBuffers(3,self.vbos.as_mut_ptr());
             gl::DeleteBuffers(3,self.ibos.as_mut_ptr());
-            gl::DeleteTextures(1,&mut self.texture);
+            gl::DeleteTextures(1,&self.texture);
             gl::DeleteProgram(self.shader);
         }
     }

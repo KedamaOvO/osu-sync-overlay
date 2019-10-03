@@ -29,10 +29,10 @@ impl ApiLoader for GLESLoader {
             let cname = CString::new(name).unwrap();
             let proc = libloaderapi::GetProcAddress(self.module, cname.as_ptr() as *const i8);
             if !proc.is_null() {
-                return mem::transmute(proc);
+                return proc as *const _;
             }
 
-            return mem::transmute((self.get_proc_addr)(cname.as_ptr() as *const _));
+            (self.get_proc_addr)(cname.as_ptr() as *const _) as *const _
         }
     }
 }

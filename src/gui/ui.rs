@@ -88,15 +88,14 @@ impl<F:Frame> UI<F>
                 Ok(mut ttf)=> {
                     let mut buf = Vec::new();
                     let _ = ttf.read_to_end(&mut buf);
-                    let font_id = fonts.add_font(&[FontSource::TtfData {
+                    fonts.add_font(&[FontSource::TtfData {
                         data: buf.as_slice(),
                         size_pixels: size as f32,
                         config: Some(FontConfig {
                             glyph_ranges: font_glyph_ranges.get(glyph_ranges).unwrap().clone(),
                             ..FontConfig::default()
                         }),
-                    }]);
-                    font_id
+                    }])
                 }
                 _ => {
                     let msg = format!("Can't load Font({}, {}). use default font.",path, size);
