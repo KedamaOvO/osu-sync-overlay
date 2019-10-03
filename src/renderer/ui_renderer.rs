@@ -1,20 +1,12 @@
-use super::gl2_bindings as gl;
-use gl::types::*;
-use winapi::um::libloaderapi;
-use winapi::shared::minwindef::PROC;
-use winapi::shared::ntdef::LPCSTR;
+use super::gles2_bindings as gl;
 use std::mem;
-use std::ffi::{CString, c_void};
-use imgui::{DrawData, DrawVert, DrawCmdParams, DrawCmd};
-use winapi::shared::windef::HDC;
-use crate::gui::UIRenderer;
-use crate::utils::get_wgl_window_size;
+use std::ffi::c_void;
+use imgui::*;
+use crate::renderer::gles2_bindings::types::*;
+use crate::renderer::ApiLoader;
 use imgui::internal::RawWrapper;
 
-type FnWglGetProcAddress = extern "stdcall" fn(LPCSTR) -> PROC;
-
-#[derive(Debug)]
-pub struct OpenGLRenderer {
+pub struct UIRenderer {
     //vertex
     vbos:[GLuint;3],
     ibos:[GLuint;3],
@@ -29,31 +21,15 @@ pub struct OpenGLRenderer {
     color_location:GLint,
 
     texture:GLuint,
-    hdc:HDC,
 }
 
-impl OpenGLRenderer {
-    pub fn load_func() {
-        let module = unsafe { libloaderapi::GetModuleHandleA(b"opengl32.dll\0".as_ptr() as *const i8) };
-        let get_proc_addr: FnWglGetProcAddress = unsafe { mem::transmute(libloaderapi::GetProcAddress(module, b"wglGetProcAddress\0".as_ptr() as *const i8)) };
-
-        //OpenGL Loader
-        gl::load_with(|name| {
-            unsafe {
-                let cname = CString::new(name).unwrap();
-                let proc = libloaderapi::GetProcAddress(module, cname.as_ptr() as *const i8);
-                if !proc.is_null() {
-                    return mem::transmute(proc);
-                }
-
-                return mem::transmute(get_proc_addr(cname.as_ptr() as *const i8));
-            }
+impl UIRenderer {
+    pub fn init<L:ApiLoader>(loader:L)->Self{
+        gl::load_with(|name|{
+            loader.load_func(name) as *const _
         });
-    }
 
-
-    pub fn init(hdc:HDC) -> Self {
-        let mut renderer = OpenGLRenderer {
+        let mut renderer = UIRenderer {
             vbos: [0,0,0],
             ibos: [0,0,0],
             index:0,
@@ -66,7 +42,6 @@ impl OpenGLRenderer {
 
             shader: 0,
             texture: 0,
-            hdc,
         };
 
         unsafe {
@@ -84,9 +59,9 @@ impl OpenGLRenderer {
             renderer.shader = gl::CreateProgram();
 
             // Build shader
-            let vs_bytes = include_bytes!("shaders/gl2_vert.glsl");
+            let vs_bytes = include_bytes!("shaders/ui_vert.glsl");
             let vs_bytes_len = vs_bytes.len() as i32;
-            let fs_bytes = include_bytes!("shaders/gl2_frag.glsl");
+            let fs_bytes = include_bytes!("shaders/ui_frag.glsl");
             let fs_bytes_len = fs_bytes.len() as i32;
             gl::ShaderSource(vs, 1, mem::transmute(&vs_bytes.as_ptr()), &vs_bytes_len as *const _);
             gl::ShaderSource(fs, 1, mem::transmute(&fs_bytes.as_ptr()), &fs_bytes_len as *const _);
@@ -105,7 +80,7 @@ impl OpenGLRenderer {
             gl::BindTexture(gl::TEXTURE_2D, renderer.texture);
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-            gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 0);
+            //gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 0);
             // Restore texture
             gl::BindTexture(gl::TEXTURE_2D, last_texture as u32);
 
@@ -124,24 +99,8 @@ impl OpenGLRenderer {
 
         renderer
     }
-}
 
-impl UIRenderer for OpenGLRenderer {
-    fn get_frame_size(&self) -> (u32, u32) {
-        get_wgl_window_size(self.hdc)
-    }
-
-    fn upload_texture_data(&mut self,w:u32,h:u32,pixels:&[u8]){
-        unsafe{
-            let mut last_texture: GLint = 0;
-            gl::GetIntegerv(gl::TEXTURE_BINDING_2D,&mut last_texture);
-            gl::BindTexture(gl::TEXTURE_2D,self.texture);
-            gl::TexImage2D(gl::TEXTURE_2D,0,gl::ALPHA as i32,w as i32,h as i32,0,gl::ALPHA,gl::UNSIGNED_BYTE,pixels.as_ptr() as *const _);
-            gl::BindTexture(gl::TEXTURE_2D,last_texture as u32);
-        }
-    }
-
-    fn render(&mut self,w:u32,h:u32,draw_data: &DrawData) {
+    pub fn render(&mut self,w:u32,h:u32,draw_data: &DrawData) {
         unsafe {
             // Backup GL state
             let last_active_texture: GLenum = 0;
@@ -212,7 +171,7 @@ impl UIRenderer for OpenGLRenderer {
                 gl::BufferData(gl::ARRAY_BUFFER,
                                mem::transmute(vtx_buffer.len() * mem::size_of::<DrawVert>()),
                                mem::transmute(vtx_buffer.as_ptr()),
-                                gl::STREAM_DRAW);
+                               gl::STREAM_DRAW);
 
                 let idx_buffer = cmd_list.idx_buffer();
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER,ibo);
@@ -238,7 +197,7 @@ impl UIRenderer for OpenGLRenderer {
                                 clip_rect,
                                 idx_offset,
                                 ..
-                        }} =>{
+                            }} =>{
                             let clip:[u32;4]=[
                                 (clip_rect[0] - draw_data.display_pos[0] * draw_data.framebuffer_scale[0]) as u32,
                                 (clip_rect[1] - draw_data.display_pos[1] * draw_data.framebuffer_scale[1]) as u32,
@@ -252,8 +211,7 @@ impl UIRenderer for OpenGLRenderer {
                             }
                         }
                         DrawCmd::ResetRenderState => (),
-                        DrawCmd::RawCallback { callback, raw_cmd } => callback(cmd_list.raw(), raw_cmd)
-                        ,
+                        DrawCmd::RawCallback { callback, raw_cmd } => callback(cmd_list.raw(), raw_cmd),
                     }
                 }
             }
@@ -294,9 +252,19 @@ impl UIRenderer for OpenGLRenderer {
             gl::Scissor(last_scissor_box[0], last_scissor_box[1], last_scissor_box[2], last_scissor_box[3]);
         }
     }
+
+    pub fn upload_texture_data(&mut self, w: u32, h: u32, pixels: &[u8]) {
+        unsafe{
+            let mut last_texture: GLint = 0;
+            gl::GetIntegerv(gl::TEXTURE_BINDING_2D,&mut last_texture);
+            gl::BindTexture(gl::TEXTURE_2D,self.texture);
+            gl::TexImage2D(gl::TEXTURE_2D,0,gl::ALPHA as i32,w as i32,h as i32,0,gl::ALPHA,gl::UNSIGNED_BYTE,pixels.as_ptr() as *const _);
+            gl::BindTexture(gl::TEXTURE_2D,last_texture as u32);
+        }
+    }
 }
 
-impl Drop for OpenGLRenderer{
+impl Drop for UIRenderer{
     fn drop(&mut self) {
         unsafe{
             gl::DeleteBuffers(3,self.vbos.as_mut_ptr());

@@ -1,10 +1,9 @@
-mod gl;
-mod gles;
 mod sync;
 mod gui;
 mod utils;
+mod renderer;
 
-use gles::egldef::*;
+use crate::renderer::{EGLDisplay, EGLSurface, GLLoader, ApiLoader, EGLBoolean, GLESLoader, WGLFrame, EGLFrame, Frame};
 use utils::*;
 
 #[macro_use] extern crate lazy_static;
@@ -16,9 +15,7 @@ use detour::GenericDetour;
 
 use simplelog::{CombinedLogger, WriteLogger, Config, LevelFilter};
 use std::fs::File;
-use crate::gl::OpenGLRenderer;
-use crate::gles::GLESRenderer;
-use crate::gui::{UI, UIRenderer};
+use crate::gui::UI;
 use crate::sync::*;
 use std::mem;
 use std::collections::HashMap;
@@ -160,10 +157,10 @@ extern "stdcall" fn hook_load_library_ex(lpLibFileName:LPCWSTR,hFile:HANDLE,dwFl
     return module;
 }
 
-static mut GL_UI:Option<UI<OpenGLRenderer>> = None;
-static mut GLES_UI:Option<UI<GLESRenderer>> = None;
+static mut GL_UI:Option<UI<WGLFrame>> = None;
+static mut GLES_UI:Option<UI<EGLFrame>> = None;
 
-fn check_config_changed<R:UIRenderer>(ui:&mut UI<R>,force:bool){
+fn check_config_changed<F:Frame>(ui:&mut UI<F>,force:bool){
     unsafe{
         if GLOBAL_CONFIG.as_ref().unwrap().check_changed() || force{
             GLOBAL_CONFIG = Some(GLOBAL_CONFIG.take().unwrap().reload());
@@ -180,12 +177,12 @@ fn check_config_changed<R:UIRenderer>(ui:&mut UI<R>,force:bool){
 }
 
 extern "stdcall" fn wgl_swap_buffers(hdc:HDC) -> BOOL{
-    //debug!("{:?}",Backtrace::new());
     unsafe {
         match &mut GL_UI{
             None=>{
-                OpenGLRenderer::load_func();
-                GL_UI = Some(UI::init(OpenGLRenderer::init(hdc)));
+                let wgl = WGLFrame::new(hdc);
+                let loader = GLLoader::init();
+                GL_UI = Some(UI::init(loader,wgl));
                 GL_UI.as_mut().map(|ui|{
                     check_config_changed(ui,true);
                 });
@@ -207,8 +204,9 @@ extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGL
     unsafe {
         match &mut GLES_UI{
             None=>{
-                GLESRenderer::load_func();
-                GLES_UI = Some(UI::init(GLESRenderer::init(display,surface)));
+                let egl = EGLFrame::new(display,surface);
+                let loader = GLESLoader::init();
+                GLES_UI = Some(UI::init(loader,egl));
                 GLES_UI.as_mut().map(|ui|{
                     check_config_changed(ui,true);
                 });

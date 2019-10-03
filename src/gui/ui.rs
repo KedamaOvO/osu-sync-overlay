@@ -4,16 +4,18 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::fs::File;
 use std::io::Read;
-use crate::gui::UIRenderer;
+use crate::renderer::{UIRenderer, Frame, ApiLoader};
 use crate::sync::{OverlayConfigItem, OverlayConfig, MemoryMappingFile};
 use std::time::Instant;
 use std::mem;
 
 const ERROR_WINDOW_ETA:f32 = 5.0f32;
 
-pub struct UI<R:UIRenderer>{
+pub struct UI<F:Frame>{
     ctx:Context,
-    renderer:R,
+    renderer:UIRenderer,
+    frame:F,
+
     fonts:HashMap<String,FontId>,
     font_glyph_ranges:HashMap<&'static str,FontGlyphRanges>,
 
@@ -23,10 +25,9 @@ pub struct UI<R:UIRenderer>{
     error_window_eta:f32,
 }
 
-impl<R> UI<R>
-    where R:UIRenderer
+impl<F:Frame> UI<F>
 {
-    pub fn init(renderer:R) -> Self{
+    pub fn init<L:ApiLoader>(loader:L,frame:F) -> Self{
         let mut ctx = Context::create();
         ctx.set_ini_filename(None);
         ctx.io_mut().display_framebuffer_scale = [1.0,1.0];
@@ -43,7 +44,9 @@ impl<R> UI<R>
 
         UI{
             ctx,
-            renderer,
+            renderer: UIRenderer::init(loader),
+            frame,
+
             fonts:HashMap::new(),
             font_glyph_ranges,
 
@@ -133,7 +136,7 @@ impl<R> UI<R>
         let now = self.ctx.io_mut().update_delta_time(self.prev_time);
         self.prev_time = now;
 
-        let (w,h)= self.renderer.get_frame_size();
+        let (w,h)= self.frame.get_frame_size();
         self.ctx.io_mut().display_size = [w as f32,h as f32];
 
         self.layout(&config.config_items,mmfs,|renderer,layout_data|{
@@ -141,11 +144,11 @@ impl<R> UI<R>
         });
     }
 
-    pub fn layout<F:FnOnce(&mut R,&DrawData)>(
+    pub fn layout<Func:FnOnce(&mut UIRenderer,&DrawData)>(
         &mut self,
         configs:&[OverlayConfigItem],
         mmfs:&HashMap<String,MemoryMappingFile>,
-        render:F)
+        render:Func)
     {
         let [w,h] = self.ctx.io().display_size;
         let dt = self.ctx.io().delta_time;

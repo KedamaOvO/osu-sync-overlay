@@ -1,4 +1,6 @@
-#version 120
+#if GL_ES
+    precision mediump float;
+#endif
 
 uniform sampler2D Texture;
 varying vec2 Frag_UV;
