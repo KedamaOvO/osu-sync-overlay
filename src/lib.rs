@@ -3,7 +3,7 @@ mod gui;
 mod utils;
 mod renderer;
 
-use crate::renderer::{EGLDisplay, EGLSurface, GLLoader, ApiLoader, EGLBoolean, GLESLoader, WGLFrame, EGLFrame, Frame};
+use crate::renderer::*;
 use utils::*;
 
 #[macro_use] extern crate lazy_static;
@@ -181,8 +181,8 @@ extern "stdcall" fn wgl_swap_buffers(hdc:HDC) -> BOOL{
         match &mut GL_UI{
             None=>{
                 let wgl = WGLFrame::new(hdc);
-                let loader = GLLoader::init();
-                GL_UI = Some(UI::init(loader,wgl));
+                let renderer = UIRenderer::init(GLLoader::init());
+                GL_UI = Some(UI::init(renderer,wgl));
                 GL_UI.as_mut().map(|ui|{
                     check_config_changed(ui,true);
                 });
@@ -205,8 +205,8 @@ extern "stdcall" fn egl_swap_buffers(display:EGLDisplay,surface:EGLSurface)->EGL
         match &mut GLES_UI{
             None=>{
                 let egl = EGLFrame::new(display,surface);
-                let loader = GLESLoader::init();
-                GLES_UI = Some(UI::init(loader,egl));
+                let renderer = UIRenderer::init(GLESLoader::init());
+                GLES_UI = Some(UI::init(renderer,egl));
                 GLES_UI.as_mut().map(|ui|{
                     check_config_changed(ui,true);
                 });

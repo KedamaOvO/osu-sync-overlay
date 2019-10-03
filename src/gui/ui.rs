@@ -4,7 +4,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::fs::File;
 use std::io::Read;
-use crate::renderer::{UIRenderer, Frame, ApiLoader};
+use crate::renderer::{UIRenderer, Frame};
 use crate::sync::{OverlayConfigItem, OverlayConfig, MemoryMappingFile};
 use std::time::Instant;
 use std::mem;
@@ -27,7 +27,7 @@ pub struct UI<F:Frame>{
 
 impl<F:Frame> UI<F>
 {
-    pub fn init<L:ApiLoader>(loader:L,frame:F) -> Self{
+    pub fn init(renderer:UIRenderer,frame:F) -> Self{
         let mut ctx = Context::create();
         ctx.set_ini_filename(None);
         ctx.io_mut().display_framebuffer_scale = [1.0,1.0];
@@ -44,7 +44,7 @@ impl<F:Frame> UI<F>
 
         UI{
             ctx,
-            renderer: UIRenderer::init(loader),
+            renderer,
             frame,
 
             fonts:HashMap::new(),
