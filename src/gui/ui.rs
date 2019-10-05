@@ -89,14 +89,16 @@ impl<F:Frame> UI<F>
                 Ok(mut ttf)=> {
                     let mut buf = Vec::new();
                     let _ = ttf.read_to_end(&mut buf);
-                    fonts.add_font(&[FontSource::TtfData {
+                    let font = fonts.add_font(&[FontSource::TtfData {
                         data: buf.as_slice(),
                         size_pixels: size as f32,
                         config: Some(FontConfig {
                             glyph_ranges: font_glyph_ranges.get(glyph_ranges).unwrap().clone(),
                             ..FontConfig::default()
                         }),
-                    }])
+                    }]);
+                    info!("Added font({}, {})",path,size);
+                    font
                 }
                 _ => {
                     let msg = format!("Can't load Font({}, {}). use default font.",path, size);
@@ -105,7 +107,7 @@ impl<F:Frame> UI<F>
                     default_font
                 }
             };
-            info!("Added font({}, {})",path,size);
+
             ((path,size),font_id)
         }).collect();
 
@@ -162,47 +164,48 @@ impl<F:Frame> UI<F>
                 continue;
             }
 
-            let bg = ui.push_style_color(StyleColor::WindowBg,config.background_color);
-            let border = ui.push_style_color(StyleColor::Border,config.border_color);
-            let title = CString::new(config.mmf()).unwrap();
+            if let Some(mmf) = mmfs.get(config.mmf()) {
+                let text = unsafe { CStr::from_ptr(mmf.get_ptr().unwrap() as *const c_char).to_str().unwrap() };
+                let bg = ui.push_style_color(StyleColor::WindowBg, config.background_color);
+                let border = ui.push_style_color(StyleColor::Border, config.border_color);
+                let title = CString::new(config.mmf()).unwrap();
 
-            let win = Window::new(unsafe{mem::transmute(title.as_c_str())})
-                .title_bar(false)
-                .always_auto_resize(true)
-                .save_settings(false)
-                .mouse_inputs(false)
-                .no_inputs()
-                .bg_alpha(config.background_color[3])
-                .position([config.x as f32,config.y as f32],Condition::Always)
-                .position_pivot(config.pivot)
-                .begin(&ui)
-                .unwrap();
+                let win = Window::new(unsafe { mem::transmute(title.as_c_str()) })
+                    .title_bar(false)
+                    .always_auto_resize(true)
+                    .save_settings(false)
+                    .mouse_inputs(false)
+                    .no_inputs()
+                    .bg_alpha(config.background_color[3])
+                    .position([config.x as f32, config.y as f32], Condition::Always)
+                    .position_pivot(config.pivot)
+                    .begin(&ui)
+                    .unwrap();
 
-            let fontid = self.fonts.get(config.mmf());
-            let font = match fontid {
-                Some(f) => ui.push_font(*f),
-                None => {
-                    self.error_messages.push(format!("[MMF: {}] Can't set Font({}, {}). use default font.", config.mmf(), config.font_path(), config.font_size));
-                    if !self.error_messages.is_empty() && self.error_window_eta <= 0.0 {
-                        self.error_window_eta = ERROR_WINDOW_ETA;
+                let fontid = self.fonts.get(config.mmf());
+                let font = match fontid {
+                    Some(f) => ui.push_font(*f),
+                    None => {
+                        self.error_messages.push(format!("[MMF: {}] Can't set Font({}, {}). use default font.", config.mmf(), config.font_path(), config.font_size));
+                        if !self.error_messages.is_empty() && self.error_window_eta <= 0.0 {
+                            self.error_window_eta = ERROR_WINDOW_ETA;
+                        }
+
+                        ui.push_font(*self.fonts.get("__default__").unwrap())
                     }
+                };
 
-                    ui.push_font(*self.fonts.get("__default__").unwrap())
-                }
-            };
+                ui.set_window_font_scale(config.font_scale);
+                ui.text_colored(config.text_color, text);
+                ui.set_window_font_scale(1.0);
 
-            let mmf = mmfs.get(config.mmf()).unwrap();
-            let text = unsafe { CStr::from_ptr(mmf.get_ptr().unwrap() as *const c_char).to_str().unwrap() };
-            ui.set_window_font_scale(config.font_scale);
-            ui.text_colored(config.text_color, text);
-            ui.set_window_font_scale(1.0);
+                font.pop(&ui);
 
-            font.pop(&ui);
+                bg.pop(&ui);
+                border.pop(&ui);
 
-            bg.pop(&ui);
-            border.pop(&ui);
-
-            win.end(&ui);
+                win.end(&ui);
+            }
         }
 
         if !self.error_messages.is_empty(){

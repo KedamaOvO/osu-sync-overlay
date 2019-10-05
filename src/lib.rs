@@ -172,9 +172,13 @@ fn check_config_changed<F: Frame>(ui: &mut UI<F>, force: bool) {
         if OVERLAY_CONFIG.as_ref().unwrap().check_changed() || force {
             info!("Reload overlay config");
             OVERLAY_CONFIG = Some(OVERLAY_CONFIG.take().unwrap().reload());
-            info!("Reload fonts");
-            ui.reload_fonts(OVERLAY_CONFIG.as_ref().unwrap(), GLOBAL_CONFIG.as_ref().unwrap().glyph_ranges.as_str());
-            info!("Fonts Reloaded");
+            if let Some(config) = OVERLAY_CONFIG.as_ref(){
+                info!("Reload overlay mmf");
+                OVERLAY_MMFS = Some(load_overlay_mmfs(config.config_items));
+                info!("Reload fonts");
+                ui.reload_fonts(OVERLAY_CONFIG.as_ref().unwrap(), GLOBAL_CONFIG.as_ref().unwrap().glyph_ranges.as_str());
+                info!("Fonts Reloaded");
+            }
         }
     }
 }
@@ -192,7 +196,9 @@ extern "stdcall" fn wgl_swap_buffers(hdc: HDC) -> BOOL {
                 info!("GL Initialized");
             }
             Some(ui) => {
-                ui.render(OVERLAY_CONFIG.as_ref().unwrap(), OVERLAY_MMFS.as_ref().unwrap());
+                if let Some(config) = OVERLAY_CONFIG.as_ref(){
+                    ui.render(config, OVERLAY_MMFS.as_ref().unwrap());
+                }
             }
         }
 
