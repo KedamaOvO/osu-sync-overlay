@@ -92,9 +92,21 @@ const MMF_LENGTH: usize = 4096;
 fn load_overlay_mmfs(configs: &[OverlayConfigItem]) -> HashMap<String, MemoryMappingFile> {
     let mut map = HashMap::new();
     for config in configs.iter() {
+        info!("Load MMF: {}", config.mmf());
         let mut mmf = MemoryMappingFile::new(config.mmf(), MMF_LENGTH);
-        let _ = mmf.map();
-        map.insert(config.mmf().to_string(), mmf);
+        let _ = mmf.map().map(|_| {
+            map.insert(config.mmf().to_string(), mmf);
+        }).map_err(|e| {
+            let err = format!("Load MMF({}) failed! Reason: {}",config.mmf(), e);
+            error!("{}",err);
+            unsafe {
+                if let Some(ui) = GL_UI.as_mut() {
+                    ui.push_error_message(err);
+                }else if let Some(ui) = GLES_UI.as_mut() {
+                    ui.push_error_message(err);
+                }
+            }
+        });
     }
     map
 }

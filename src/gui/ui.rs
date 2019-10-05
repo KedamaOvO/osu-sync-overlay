@@ -21,8 +21,7 @@ pub struct UI<F:Frame>{
 
     prev_time:Instant,
 
-    error_messages:Vec<String>,
-    error_window_eta:f32,
+    error_messages:Vec<(String,f32)>,
 }
 
 impl<F:Frame> UI<F>
@@ -53,7 +52,6 @@ impl<F:Frame> UI<F>
             prev_time:Instant::now(),
 
             error_messages:Vec::new(),
-            error_window_eta:0.0,
         }
     }
 
@@ -81,8 +79,6 @@ impl<F:Frame> UI<F>
 
         let font_glyph_ranges = &self.font_glyph_ranges;
         let msgs = &mut self.error_messages;
-        let eta = &mut self.error_window_eta;
-        msgs.clear();
         // Add fonts
         let ids:Vec<((&str,i32),FontId)> = font_set.iter().map(|&(path,size)|{
             let font_id = match File::open(path) {
@@ -103,17 +99,13 @@ impl<F:Frame> UI<F>
                 _ => {
                     let msg = format!("Can't load Font({}, {}). use default font.",path, size);
                     error!("{}",msg);
-                    msgs.push(msg);
+                    msgs.push((msg,ERROR_WINDOW_ETA));
                     default_font
                 }
             };
 
             ((path,size),font_id)
         }).collect();
-
-        if !msgs.is_empty() {
-            *eta = ERROR_WINDOW_ETA;
-        }
 
         // MMF -> FontId
         for config in configs.iter(){
@@ -149,6 +141,10 @@ impl<F:Frame> UI<F>
         });
     }
 
+    pub fn push_error_message(&mut self,msg:String){
+        self.error_messages.push((msg,ERROR_WINDOW_ETA));
+    }
+
     pub fn layout<Func:FnOnce(&mut UIRenderer,&DrawData)>(
         &mut self,
         configs:&[OverlayConfigItem],
@@ -165,7 +161,7 @@ impl<F:Frame> UI<F>
             }
 
             if let Some(mmf) = mmfs.get(config.mmf()) {
-                let text = unsafe { CStr::from_ptr(mmf.get_ptr().unwrap() as *const c_char).to_str().unwrap() };
+                let text = unsafe { CStr::from_ptr(mmf.get_ptr().unwrap() as *const c_char) }.to_str().unwrap();
                 let bg = ui.push_style_color(StyleColor::WindowBg, config.background_color);
                 let border = ui.push_style_color(StyleColor::Border, config.border_color);
                 let title = CString::new(config.mmf()).unwrap();
@@ -185,14 +181,7 @@ impl<F:Frame> UI<F>
                 let fontid = self.fonts.get(config.mmf());
                 let font = match fontid {
                     Some(f) => ui.push_font(*f),
-                    None => {
-                        self.error_messages.push(format!("[MMF: {}] Can't set Font({}, {}). use default font.", config.mmf(), config.font_path(), config.font_size));
-                        if !self.error_messages.is_empty() && self.error_window_eta <= 0.0 {
-                            self.error_window_eta = ERROR_WINDOW_ETA;
-                        }
-
-                        ui.push_font(*self.fonts.get("__default__").unwrap())
-                    }
+                    None => ui.push_font(*self.fonts.get("__default__").unwrap())
                 };
 
                 ui.set_window_font_scale(config.font_scale);
@@ -220,17 +209,17 @@ impl<F:Frame> UI<F>
                 .begin(&ui)
                 .unwrap();
 
-            for msg in self.error_messages.iter() {
-                ui.text_colored([1.0, 1.0, 1.0, 1.0], msg);
+
+            for msg in self.error_messages.iter_mut() {
+                ui.text_colored([1.0, 1.0, 0.0, 1.0], format!("({:.1}) {}",msg.1,msg.0));
+                msg.1 -= dt;
             }
-            let font = ui.push_font(*self.fonts.get("__default__").unwrap());
-            ui.text_colored([0.0, 1.0, 0.0, 1.0], format!("Close window after {:.2}(s)", self.error_window_eta));
-            font.pop(&ui);
+
+            self.error_messages.retain(|msg|{
+                msg.1 >= 0.0
+            });
+
             win.end(&ui);
-            self.error_window_eta -= dt;
-            if self.error_window_eta < 0.0{
-                self.error_messages.clear();
-            }
         }
         let layout_data = ui.render();
         render(&mut self.renderer,layout_data);
