@@ -20,7 +20,7 @@ use simplelog::{CombinedLogger, WriteLogger, Config, LevelFilter};
 use std::fs::File;
 use crate::gui::UI;
 use crate::sync::*;
-use std::mem;
+use std::{mem, panic};
 use std::collections::HashMap;
 use widestring::U16CString;
 
@@ -94,7 +94,7 @@ fn load_overlay_mmfs(configs: &[OverlayConfigItem]) -> HashMap<String, MemoryMap
     for config in configs.iter() {
         info!("Load MMF: {}", config.mmf());
         let mut mmf = MemoryMappingFile::new(config.mmf(), MMF_LENGTH);
-        let _ = mmf.map().map(|_| {
+        let _ = mmf.mapping().map(|_| {
             map.insert(config.mmf().to_string(), mmf);
         }).map_err(|e| {
             let err = format!("Load MMF({}) failed! Reason: {}",config.mmf(), e);
@@ -119,6 +119,12 @@ fn init_logger() {
                 WriteLogger::new(LevelFilter::Trace, Config::default(), File::create("overlay-debug.log").unwrap()),
         ]
     ).unwrap();
+    panic::set_hook(Box::new(|panic_info|{
+        use backtrace::Backtrace;
+        error!("panic occurred: {:?}", panic_info.payload().downcast_ref::<&str>().unwrap());
+        let bt = Backtrace::new();
+        error!("{:?}",bt);
+    }));
 }
 
 fn init_config() {
@@ -184,6 +190,7 @@ fn check_config_changed<F: Frame>(ui: &mut UI<F>, force: bool) {
         if OVERLAY_CONFIG.as_ref().unwrap().check_changed() || force {
             info!("Reload overlay config");
             OVERLAY_CONFIG = Some(OVERLAY_CONFIG.take().unwrap().reload());
+
             if let Some(config) = OVERLAY_CONFIG.as_ref(){
                 info!("Reload overlay mmf");
                 OVERLAY_MMFS = Some(load_overlay_mmfs(config.config_items));
@@ -234,7 +241,9 @@ extern "stdcall" fn egl_swap_buffers(display: EGLDisplay, surface: EGLSurface) -
                 info!("GLES Initialized");
             }
             Some(ui) => {
-                ui.render(OVERLAY_CONFIG.as_ref().unwrap(), OVERLAY_MMFS.as_ref().unwrap());
+                if let Some(config) = OVERLAY_CONFIG.as_ref() {
+                    ui.render(config, OVERLAY_MMFS.as_ref().unwrap());
+                }
             }
         }
 

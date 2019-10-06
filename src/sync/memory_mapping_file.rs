@@ -30,7 +30,7 @@ impl MemoryMappingFile {
         }
     }
 
-    pub fn map(&mut self) -> Result<*mut u8, String> {
+    pub fn mapping(&mut self) -> Result<*mut u8, String> {
         unsafe {
             if self.mapped_ptr.is_null() {
                 let p = memoryapi::MapViewOfFile(self.mmf_handle, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, self.size);

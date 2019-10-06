@@ -40,7 +40,7 @@ pub struct OverlayConfig<'a> {
 impl GlobalConfig {
     pub fn new(mut mmf: MemoryMappingFile) -> Self {
         unsafe {
-            let mut ptr = mmf.map().unwrap();
+            let mut ptr = mmf.mapping().unwrap();
             //skip was_changed and padding
             ptr = ptr.add(4);
 
@@ -60,7 +60,7 @@ impl GlobalConfig {
     pub fn reload(self) -> Self {
         let mut config = self;
         unsafe {
-            *(config.mmf.map().unwrap() as *mut bool) = false;
+            *(config.mmf.mapping().unwrap() as *mut bool) = false;
         }
         GlobalConfig::new(config.mmf)
     }
@@ -69,7 +69,7 @@ impl GlobalConfig {
 impl<'a> OverlayConfig<'a> {
     pub fn new(mut mmf: MemoryMappingFile) -> Self {
         unsafe {
-            let mut ptr = mmf.map().unwrap();
+            let mut ptr = mmf.mapping().unwrap();
 
             //skip was_changed and padding
             ptr = ptr.add(4);
@@ -95,7 +95,7 @@ impl<'a> OverlayConfig<'a> {
     pub fn reload(self) -> Self {
         let mut config = self;
         unsafe {
-            *(config.mmf.map().unwrap() as *mut bool) = false;
+            *(config.mmf.mapping().unwrap() as *mut bool) = false;
         }
         OverlayConfig::new(config.mmf)
     }

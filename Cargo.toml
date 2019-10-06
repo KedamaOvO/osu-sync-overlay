@@ -8,7 +8,9 @@ edition = "2018"
 [profile.release]
 lto = true          # Enable Link Time Optimization
 codegen-units = 1   # Reduce number of codegen units to increase optimizations.
-panic = 'abort'     # Abort on panic
+debug = true
+panic = 'unwind'
+#debuginfo-level = 1
 
 [lib]
 name = "overlay"
@@ -22,3 +24,4 @@ lazy_static = "1.4.0"
 log = "0.4.8"
 simplelog = "0.7.3"
 widestring = "0.4.0"
+backtrace = "0.3.38"
