@@ -84,20 +84,20 @@ pub extern "stdcall" fn DllMain(
 }
 
 static mut GLOBAL_CONFIG: Option<GlobalConfig> = None;
-static mut OVERLAY_CONFIG: Option<OverlayConfig> = None;
+static mut OVERLAY_CONFIG: Option<OverlayConfigs> = None;
 static mut OVERLAY_MMFS: Option<HashMap<String, MemoryMappingFile>> = None;
 const MMF_OVERLAY_CONFIG_LENGTH: usize = 65535;
 const MMF_LENGTH: usize = 4096;
 
-fn load_overlay_mmfs(configs: &[OverlayConfigItem]) -> HashMap<String, MemoryMappingFile> {
+fn load_overlay_mmfs(configs: &OverlayConfigs) -> HashMap<String, MemoryMappingFile> {
     let mut map = HashMap::new();
-    for config in configs.iter() {
-        info!("Load MMF: {}", config.mmf());
-        let mut mmf = MemoryMappingFile::new(config.mmf(), MMF_LENGTH);
+    for (mmf_str,_,_) in configs.iter() {
+        info!("Load MMF: {}", mmf_str);
+        let mut mmf = MemoryMappingFile::new(mmf_str, MMF_LENGTH);
         let _ = mmf.mapping().map(|_| {
-            map.insert(config.mmf().to_string(), mmf);
+            map.insert(mmf_str.to_string(), mmf);
         }).map_err(|e| {
-            let err = format!("Load MMF({}) failed! Reason: {}",config.mmf(), e);
+            let err = format!("Load MMF({}) failed! Reason: {}",mmf_str, e);
             error!("{}",err);
             unsafe {
                 if let Some(ui) = GL_UI.as_mut() {
@@ -130,8 +130,8 @@ fn init_logger() {
 fn init_config() {
     unsafe {
         GLOBAL_CONFIG = Some(GlobalConfig::new(MemoryMappingFile::new("Local\\rtpp-overlay-global-config", mem::size_of::<GlobalConfig>())));
-        OVERLAY_CONFIG = Some(OverlayConfig::new(MemoryMappingFile::new("Local\\rtpp-overlay-configs", MMF_OVERLAY_CONFIG_LENGTH)));
-        OVERLAY_MMFS = Some(load_overlay_mmfs(OVERLAY_CONFIG.as_ref().unwrap().config_items));
+        OVERLAY_CONFIG = Some(OverlayConfigs::new(MemoryMappingFile::new("Local\\rtpp-overlay-configs", MMF_OVERLAY_CONFIG_LENGTH)));
+        OVERLAY_MMFS = Some(load_overlay_mmfs(OVERLAY_CONFIG.as_ref().unwrap()));
     }
 }
 
@@ -193,7 +193,7 @@ fn check_config_changed<F: Frame>(ui: &mut UI<F>, force: bool) {
 
             if let Some(config) = OVERLAY_CONFIG.as_ref(){
                 info!("Reload overlay mmf");
-                OVERLAY_MMFS = Some(load_overlay_mmfs(config.config_items));
+                OVERLAY_MMFS = Some(load_overlay_mmfs(config));
                 info!("Reload fonts");
                 ui.reload_fonts(OVERLAY_CONFIG.as_ref().unwrap(), GLOBAL_CONFIG.as_ref().unwrap().glyph_ranges.as_str());
                 info!("Fonts Reloaded");

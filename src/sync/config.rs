@@ -28,13 +28,22 @@ pub struct OverlayConfigItem {
 }
 
 #[repr(C)]
-pub struct OverlayConfig<'a> {
+pub struct OverlayConfigs<'a> {
     //was_changed:bool,
     //_padding:[u8;3],
     //pub config_count:i32,
-    pub config_items: &'a [OverlayConfigItem],
+
+    config_items: &'a [OverlayConfigItem],
+    mmf_strs:Vec<String>,
+    font_paths:Vec<String>,
 
     mmf: MemoryMappingFile,
+}
+
+pub struct OverlayConfigsIter<'a>
+{
+    configs:&'a OverlayConfigs<'a>,
+    index:usize,
 }
 
 impl GlobalConfig {
@@ -66,7 +75,7 @@ impl GlobalConfig {
     }
 }
 
-impl<'a> OverlayConfig<'a> {
+impl<'a> OverlayConfigs<'a> {
     pub fn new(mut mmf: MemoryMappingFile) -> Self {
         unsafe {
             let mut ptr = mmf.mapping().unwrap();
@@ -81,9 +90,19 @@ impl<'a> OverlayConfig<'a> {
             let ptr = ptr as *const OverlayConfigItem;
             let items = std::slice::from_raw_parts(ptr, count);
 
-            OverlayConfig {
+            let mut mmfs = Vec::new();
+            let mut font_paths = Vec::new();
+
+            for config in items.iter(){
+                mmfs.push(CStr::from_ptr(config.mmf.as_ptr()).to_str().unwrap().to_owned());
+                font_paths.push(CStr::from_ptr(config.font_path.as_ptr()).to_str().unwrap().to_owned());
+            }
+
+            OverlayConfigs {
                 config_items: items,
                 mmf,
+                mmf_strs: mmfs,
+                font_paths,
             }
         }
     }
@@ -97,18 +116,30 @@ impl<'a> OverlayConfig<'a> {
         unsafe {
             *(config.mmf.mapping().unwrap() as *mut bool) = false;
         }
-        OverlayConfig::new(config.mmf)
+        OverlayConfigs::new(config.mmf)
+    }
+
+    pub fn iter(&self)->OverlayConfigsIter{
+        OverlayConfigsIter{
+            configs:self,
+            index:0,
+        }
     }
 }
 
-impl OverlayConfigItem {
-    pub fn mmf(&self) -> &str {
-        let str = unsafe { CStr::from_ptr(self.mmf.as_ptr()) };
-        str.to_str().unwrap()
-    }
+impl<'a> Iterator for OverlayConfigsIter<'a>{
+    type Item = (&'a str,&'a str,&'a OverlayConfigItem);
 
-    pub fn font_path(&self) -> &str {
-        let str = unsafe { CStr::from_ptr(self.font_path.as_ptr()) };
-        str.to_str().unwrap()
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.configs.config_items.len() {
+            let r = (
+                self.configs.mmf_strs[self.index].as_str(),
+                self.configs.font_paths[self.index].as_str(),
+                &self.configs.config_items[self.index]
+            );
+            self.index += 1;
+            return Some(r)
+        }
+        None
     }
 }
